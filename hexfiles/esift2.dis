@@ -37,14 +37,14 @@ Disassembly of section .text:
   74:	241d0000 	li	sp,0
   78:	241e0000 	li	s8,0
   7c:	241f0000 	li	ra,0
-  80:	0c00002c 	jal	b0 <begin>
-  84:	3c1d0010 	lui	sp,0x10
-  88:	0380e025 	move	gp,gp
-  8c:	409cb800 	mtc0	gp,$23
-  90:	00000000 	nop
-  94:	409cc800 	mtc0	gp,$25
-  98:	08000026 	j	98 <_ftext+0x98>
-  9c:	00000000 	nop
+  80:	3c1d0010 	lui	sp,0x10
+  84:	0c00002c 	jal	b0 <begin>
+  88:	00000000 	nop
+  8c:	0380e025 	move	gp,gp
+  90:	409cb800 	mtc0	gp,$23
+  94:	00000000 	nop
+  98:	409cc800 	mtc0	gp,$25
+  9c:	08000027 	j	9c <_ftext+0x9c>
   a0:	00000000 	nop
   a4:	00000000 	nop
   a8:	00000000 	nop
@@ -57,57 +57,65 @@ Disassembly of section .text:
   bc:	8fa330e0 	lw	v1,12512(sp)
   c0:	ac600000 	sw	zero,0(v1)
   c4:	24630004 	addiu	v1,v1,4
-  c8:	1443fffc 	bne	v0,v1,bc <begin+0xc>
-  cc:	afa330e0 	sw	v1,12512(sp)
-  d0:	3c080003 	lui	t0,0x3
-  d4:	24070003 	li	a3,3
-  d8:	24090001 	li	t1,1
-  dc:	25080d41 	addiu	t0,t0,3393
-  e0:	240a01c3 	li	t2,451
-  e4:	00071840 	sll	v1,a3,0x1
-  e8:	00031182 	srl	v0,v1,0x6
-  ec:	24420001 	addiu	v0,v0,1
-  f0:	00032042 	srl	a0,v1,0x1
-  f4:	00021080 	sll	v0,v0,0x2
-  f8:	30660001 	andi	a2,v1,0x1
-  fc:	00671821 	addu	v1,v1,a3
- 100:	03a21021 	addu	v0,sp,v0
- 104:	00892004 	sllv	a0,t1,a0
- 108:	10c00004 	beqz	a2,11c <begin+0x6c>
+  c8:	afa330e0 	sw	v1,12512(sp)
+  cc:	1443fffb 	bne	v0,v1,bc <begin+0xc>
+  d0:	00000000 	nop
+  d4:	3c080003 	lui	t0,0x3
+  d8:	24070003 	li	a3,3
+  dc:	24090001 	li	t1,1
+  e0:	25080d41 	addiu	t0,t0,3393
+  e4:	240a01c3 	li	t2,451
+  e8:	00071840 	sll	v1,a3,0x1
+  ec:	00031182 	srl	v0,v1,0x6
+  f0:	24420001 	addiu	v0,v0,1
+  f4:	00032042 	srl	a0,v1,0x1
+  f8:	00021080 	sll	v0,v0,0x2
+  fc:	30660001 	andi	a2,v1,0x1
+ 100:	00671821 	addu	v1,v1,a3
+ 104:	03a21021 	addu	v0,sp,v0
+ 108:	00892004 	sllv	a0,t1,a0
  10c:	0068282b 	sltu	a1,v1,t0
- 110:	8c460000 	lw	a2,0(v0)
- 114:	00862025 	or	a0,a0,a2
- 118:	ac440000 	sw	a0,0(v0)
- 11c:	14a0fff3 	bnez	a1,ec <begin+0x3c>
- 120:	00031182 	srl	v0,v1,0x6
- 124:	24e70002 	addiu	a3,a3,2
- 128:	14eaffef 	bne	a3,t2,e8 <begin+0x38>
- 12c:	00071840 	sll	v1,a3,0x1
- 130:	3c060003 	lui	a2,0x3
- 134:	24070001 	li	a3,1
- 138:	24040003 	li	a0,3
- 13c:	24080001 	li	t0,1
- 140:	24c60d41 	addiu	a2,a2,3393
- 144:	00041182 	srl	v0,a0,0x6
- 148:	24420001 	addiu	v0,v0,1
- 14c:	00021080 	sll	v0,v0,0x2
- 150:	03a21021 	addu	v0,sp,v0
- 154:	8c450000 	lw	a1,0(v0)
- 158:	00041842 	srl	v1,a0,0x1
- 15c:	00681004 	sllv	v0,t0,v1
- 160:	00451024 	and	v0,v0,a1
- 164:	14400002 	bnez	v0,170 <begin+0xc0>
- 168:	24840002 	addiu	a0,a0,2
- 16c:	24e70001 	addiu	a3,a3,1
- 170:	1486fff5 	bne	a0,a2,148 <begin+0x98>
- 174:	00041182 	srl	v0,a0,0x6
- 178:	24024640 	li	v0,17984
- 17c:	10e20004 	beq	a3,v0,190 <begin+0xe0>
- 180:	24020001 	li	v0,1
- 184:	4082c000 	mtc0	v0,$24
- 188:	03e00008 	jr	ra
- 18c:	27bd30e8 	addiu	sp,sp,12520
- 190:	4082c800 	mtc0	v0,$25
- 194:	03e00008 	jr	ra
+ 110:	10c00004 	beqz	a2,124 <begin+0x74>
+ 114:	00000000 	nop
+ 118:	8c460000 	lw	a2,0(v0)
+ 11c:	00862025 	or	a0,a0,a2
+ 120:	ac440000 	sw	a0,0(v0)
+ 124:	14a0fff1 	bnez	a1,ec <begin+0x3c>
+ 128:	00000000 	nop
+ 12c:	24e70002 	addiu	a3,a3,2
+ 130:	14eaffed 	bne	a3,t2,e8 <begin+0x38>
+ 134:	00000000 	nop
+ 138:	3c060003 	lui	a2,0x3
+ 13c:	24070001 	li	a3,1
+ 140:	24040003 	li	a0,3
+ 144:	24080001 	li	t0,1
+ 148:	24c60d41 	addiu	a2,a2,3393
+ 14c:	00041182 	srl	v0,a0,0x6
+ 150:	24420001 	addiu	v0,v0,1
+ 154:	00021080 	sll	v0,v0,0x2
+ 158:	03a21021 	addu	v0,sp,v0
+ 15c:	8c450000 	lw	a1,0(v0)
+ 160:	00041842 	srl	v1,a0,0x1
+ 164:	00681004 	sllv	v0,t0,v1
+ 168:	00451024 	and	v0,v0,a1
+ 16c:	24840002 	addiu	a0,a0,2
+ 170:	14400002 	bnez	v0,17c <begin+0xcc>
+ 174:	00000000 	nop
+ 178:	24e70001 	addiu	a3,a3,1
+ 17c:	1486fff3 	bne	a0,a2,14c <begin+0x9c>
+ 180:	00000000 	nop
+ 184:	24024640 	li	v0,17984
+ 188:	10e20006 	beq	a3,v0,1a4 <begin+0xf4>
+ 18c:	00000000 	nop
+ 190:	24020001 	li	v0,1
+ 194:	4082c000 	mtc0	v0,$24
  198:	27bd30e8 	addiu	sp,sp,12520
- 19c:	00000000 	nop
+ 19c:	03e00008 	jr	ra
+ 1a0:	00000000 	nop
+ 1a4:	24020001 	li	v0,1
+ 1a8:	4082c800 	mtc0	v0,$25
+ 1ac:	27bd30e8 	addiu	sp,sp,12520
+ 1b0:	03e00008 	jr	ra
+ 1b4:	00000000 	nop
+ 1b8:	00000000 	nop
+ 1bc:	00000000 	nop

@@ -1,4 +1,6 @@
-# CSE 148 Baseline version 3.3
+# CSE 148 Baseline version 4
+
+## Release v4 01/13/2025 Davit Markarian/Trivikram Choudhury : Removed branch delay slots from CPU files/benchmarks
 
 ## Release v3.3 01/10/2024 Jiayan Dong: Adding support to generate benchmarks/hex files.
 

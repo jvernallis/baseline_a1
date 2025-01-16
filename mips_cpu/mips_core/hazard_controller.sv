@@ -57,7 +57,8 @@ module hazard_controller (
 
 	// We have total 6 potential hazards
 	logic ic_miss;			// I cache miss
-	logic ds_miss;			// Delay slot miss
+	// Gone without delay slots:
+	//logic ds_miss;			// Delay slot miss
 	logic dec_overload;		// Branch predict taken or Jump
 	logic ex_overload;		// Branch prediction wrong
 	//    lw_hazard;		// Load word hazard (input from forward unit)
@@ -67,7 +68,7 @@ module hazard_controller (
 	always_comb
 	begin
 		ic_miss = ~if_i_cache_output.valid;
-		ds_miss = ic_miss & dec_branch_decoded.valid;
+		//ds_miss = ic_miss & dec_branch_decoded.valid;
 		dec_overload = dec_branch_decoded.valid
 			& (dec_branch_decoded.is_jump
 				| (dec_branch_decoded.prediction == TAKEN));
@@ -127,6 +128,11 @@ module hazard_controller (
 			if_flush = 1'b1;
 		end
 
+		if(dec_overload) begin
+			if_stall = 1'b0;
+			if_flush = 1'b1;
+		end
+
 		if (dec_stall)
 			if_stall = 1'b1;
 	end
@@ -136,7 +142,8 @@ module hazard_controller (
 		dec_stall = 1'b0;
 		dec_flush = 1'b0;
 
-		if (ds_miss | lw_hazard)
+		//if (ds_miss | lw_hazard)
+		if (lw_hazard)
 		begin
 			dec_stall = 1'b1;
 			dec_flush = 1'b1;
@@ -144,6 +151,9 @@ module hazard_controller (
 
 		if (ex_stall)
 			dec_stall = 1'b1;
+
+		if(ex_overload)
+			dec_flush = 1'b1;
 	end
 
 	always_comb
@@ -187,7 +197,7 @@ module hazard_controller (
 	always_ff @(posedge clk)
 	begin
 		if (ic_miss) stats_event("ic_miss");
-		if (ds_miss) stats_event("ds_miss");
+		// if (ds_miss) stats_event("ds_miss");
 		if (dec_overload) stats_event("dec_overload");
 		if (ex_overload) stats_event("ex_overload");
 		if (lw_hazard) stats_event("lw_hazard");

@@ -1,5 +1,5 @@
 CC = mips-linux-gnu-gcc
-CFLAG = -mips32 -mabi=32 -mno-abicalls -fno-stack-protector -fno-builtin -O3
+CFLAG = -mips32 -fno-delayed-branch -mabi=32 -mno-abicalls -fno-stack-protector -fno-builtin -O3
 
 LD = mips-linux-gnu-ld
 

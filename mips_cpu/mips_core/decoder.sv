@@ -293,7 +293,7 @@ module decoder (
 
 						6'h18:  // mul
 						begin
-						`ifdef SIMULTION
+						`ifdef SIMULATION
 							$error("%m (%t) mul not supported. Treated as a NOP. PC=0x%x", $time, i_pc.pc);
 						`endif
 							out.valid = 1'b0;
@@ -301,7 +301,7 @@ module decoder (
 
 						6'h19:  //mulu
 						begin
-						`ifdef SIMULTION
+						`ifdef SIMULATION
 							$error("%m (%t) mulu not supported. Treated as a NOP. PC=0x%x", $time, i_pc.pc);
 						`endif
 							out.valid = 1'b0;
@@ -309,7 +309,7 @@ module decoder (
 
 						6'h1a:  //div
 						begin
-						`ifdef SIMULTION
+						`ifdef SIMULATION
 							$error("%m (%t) div not supported. Treated as a NOP. PC=0x%x", $time, i_pc.pc);
 						`endif
 							out.valid = 1'b0;
@@ -317,7 +317,7 @@ module decoder (
 
 						6'h1b:  //divu
 						begin
-						`ifdef SIMULTION
+						`ifdef SIMULATION
 							$error("%m (%t) divu not supported. Treated as a NOP. PC=0x%x", $time, i_pc.pc);
 						`endif
 							out.valid = 1'b0;
@@ -325,7 +325,7 @@ module decoder (
 
 						default:
 						begin
-						`ifdef SIMULTION
+						`ifdef SIMULATION
 							$error("%m (%t) unknown R-type funct code %b. Treated as a NOP. PC=0x%x", $time, i_inst.data[5:0], i_pc.pc);
 						`endif
 							out.valid = 1'b0;
@@ -450,7 +450,7 @@ module decoder (
 
 				6'h20: //lb
 				begin
-				`ifdef SIMULTION
+				`ifdef SIMULATION
 					$error("%m (%t) lb not supported. Treated as a NOP. PC=0x%x", $time, i_pc.pc);
 				`endif
 					out.valid = 1'b0;
@@ -458,7 +458,7 @@ module decoder (
 
 				6'h24: //lbu
 				begin
-				`ifdef SIMULTION
+				`ifdef SIMULATION
 					$error("%m (%t) lbu not supported. Treated as a NOP. PC=0x%x", $time, i_pc.pc);
 				`endif
 					out.valid = 1'b0;
@@ -466,7 +466,7 @@ module decoder (
 
 				6'h21: //lh
 				begin
-				`ifdef SIMULTION
+				`ifdef SIMULATION
 					$error("%m (%t) lh not supported. Treated as a NOP. PC=0x%x", $time, i_pc.pc);
 				`endif
 					out.valid = 1'b0;
@@ -474,7 +474,7 @@ module decoder (
 
 				6'h25: //lhu
 				begin
-				`ifdef SIMULTION
+				`ifdef SIMULATION
 					$error("%m (%t) lhu not supported. Treated as a NOP. PC=0x%x", $time, i_pc.pc);
 				`endif
 					out.valid = 1'b0;
@@ -490,7 +490,7 @@ module decoder (
 
 				6'h28:  //sb
 				begin
-				`ifdef SIMULTION
+				`ifdef SIMULATION
 					$error("%m (%t) sb not supported. Treated as a NOP. PC=0x%x", $time, i_pc.pc);
 				`endif
 					out.valid = 1'b0;
@@ -498,7 +498,7 @@ module decoder (
 
 				6'h29:  //sh
 				begin
-				`ifdef SIMULTION
+				`ifdef SIMULATION
 					$error("%m (%t) sh not supported. Treated as a NOP. PC=0x%x", $time, i_pc.pc);
 				`endif
 					out.valid = 1'b0;
@@ -537,7 +537,7 @@ module decoder (
 
 						default:
 						begin
-						`ifdef SIMULTION
+						`ifdef SIMULATION
 							$error("%m (%t) unknown MTC0 value 0x%x. Treated as a NOP. PC=0x%x", $time, i_inst.data[15:11], i_pc.pc);
 						`endif
 							out.valid = 1'b0;
@@ -547,7 +547,7 @@ module decoder (
 
 				default:
 				begin
-				`ifdef SIMULTION
+				`ifdef SIMULATION
 					$error("%m (%t) unknown opcode %b. Treated as a NOP. PC=0x%x", $time, i_inst.data[31:26], i_pc.pc);
 				`endif
 					out.valid = 1'b0;
