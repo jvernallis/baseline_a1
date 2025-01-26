@@ -24,7 +24,8 @@ module branch_target_buffer#(
 
     //signals for least recently used associative logic
     logic r_select_way;
-    logic w_select_way;
+    logic w1_select_way;
+	 logic w2_select_way;
 	 logic [DEPTH - 1 : 0] lru_rp;
 
     assign {i_tag, i_index} = i_pc_current.pc[`ADDR_WIDTH - 1 : 2];
@@ -115,14 +116,16 @@ module branch_target_buffer#(
     end
 
     //tagbank connections
-    logic [INDEX_WIDTH - 1 : 0]w_index;
-    logic [TAG_WIDTH - 1 : 0]w_tag_data;
+    logic [INDEX_WIDTH - 1 : 0]w1_index;
+    logic [TAG_WIDTH - 1 : 0]w1_tag_data;
+	 logic [INDEX_WIDTH - 1 : 0]w2_index;
+    logic [TAG_WIDTH - 1 : 0]w2_tag_data;
     always_comb
 	begin
-        tagbank_wdata = w_tag_data;
-        tagbank_waddr = w_index;
-		  tagbank_we[0] = ~w_select_way ? we_btb :1'b0;
-        tagbank_we[1] = w_select_way ? we_btb :1'b0;
+        tagbank_wdata = w2_tag_data;
+        tagbank_waddr = w2_index;
+		  tagbank_we[0] = ~w2_select_way ? we_reg :1'b0;
+        tagbank_we[1] = w2_select_way ? we_reg :1'b0;
 		  
 		  tagbank_raddr = i_index_next;
 	end
@@ -132,9 +135,9 @@ module branch_target_buffer#(
    always_comb
 	begin
         targetbank_wdata = w_target_data;
-        targetbank_waddr = w_index;
-		  targetbank_we[0] = ~w_select_way ? we_btb :1'b0;
-        targetbank_we[1] = w_select_way ? we_btb :1'b0;
+        targetbank_waddr = w2_index;
+		  targetbank_we[0] = ~w2_select_way ? we_reg :1'b0;
+        targetbank_we[1] = w2_select_way ? we_reg :1'b0;
 		  
 		  targetbank_raddr = i_index_next;
 	end
@@ -144,6 +147,8 @@ module branch_target_buffer#(
 		hit_out = hit;
 		r_target = targetbank_rdata[r_select_way];
 	end
+	
+	logic we_reg;
 	
    always_ff @(posedge clk)
 	begin
@@ -159,15 +164,23 @@ module branch_target_buffer#(
             lru_rp[i_index] <= ~r_select_way;
             if(~hit)
             begin
-					  //data for write (will write cycle after miss and branch confirm)
-                 w_tag_data <= i_tag;
-                 w_target_data <= w_target;
-                 w_index <= i_index;
-                 w_select_way <= r_select_way;
-					  //set valid bit on a write(will be valid cycle after write)
-					  valid_bits[w_index][w_select_way] <= we_btb;
+					  //data for write locked in for miss(will write 2 cycles after miss and branch confirm)
+                 w1_tag_data <= i_tag;
+                 
+                 w1_index <= i_index;
+                 w1_select_way <= r_select_way;
+					  
             end
-
+				//set valid bit on a write(will be valid cycle after write)
+				we_reg<= we_btb;
+				valid_bits[w2_index][w2_select_way] <=we_reg;
+				//data for write (will write cycle after miss and branch confirm)
+            w2_tag_data <= w1_tag_data;  
+            w2_index <= w1_index;
+            w2_select_way <= w1_select_way;
+				//target from decode sent to write
+				w_target_data <= w_target;
+				
       end
 	end
 endmodule
