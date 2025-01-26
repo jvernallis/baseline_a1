@@ -9,6 +9,7 @@ module branch_target_buffer#(
     input  rst_n,  // Synchronous reset active low
     input we_btb,
     input logic [`ADDR_WIDTH - 1 : 0] w_target,
+    output logic hit_out,
     output logic [`ADDR_WIDTH - 1 : 0] r_target,
     // Request
     pc_ifc.in i_pc_current,
