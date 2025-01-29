@@ -19,14 +19,14 @@ module branch_target_buffer#(
     localparam DEPTH = 1 << INDEX_WIDTH;
     
     logic [TAG_WIDTH - 1 : 0] i_tag;
-	 logic [INDEX_WIDTH - 1 : 0] i_index;
-	 logic [INDEX_WIDTH - 1 : 0] i_index_next;
+	logic [INDEX_WIDTH - 1 : 0] i_index;
+	logic [INDEX_WIDTH - 1 : 0] i_index_next;
 
     //signals for least recently used associative logic
     logic r_select_way;
     logic w1_select_way;
-	 logic w2_select_way;
-	 logic [DEPTH - 1 : 0] lru_rp;
+	logic w2_select_way;
+	logic [DEPTH - 1 : 0] lru_rp;
 
     assign {i_tag, i_index} = i_pc_current.pc[`ADDR_WIDTH - 1 : 2];
 	 assign i_index_next = i_pc_next.pc[INDEX_WIDTH-1:0];
@@ -38,7 +38,7 @@ module branch_target_buffer#(
     logic [`ADDR_WIDTH - 1 : 0] targetbank_rdata[ASSOCIATIVITY];
 
     //generate target banks
-   genvar g;
+    genvar g;
 	generate
 	
 		for (g=0; g< ASSOCIATIVITY; g++)
@@ -60,7 +60,7 @@ module branch_target_buffer#(
 	endgenerate
 
    // tagbank signals 
-   logic tagbank_we[ASSOCIATIVITY];
+    logic tagbank_we[ASSOCIATIVITY];
 	logic [TAG_WIDTH - 1 : 0] tagbank_wdata;
 	logic [INDEX_WIDTH - 1 : 0] tagbank_waddr;
 	logic [INDEX_WIDTH - 1 : 0] tagbank_raddr;
@@ -118,26 +118,26 @@ module branch_target_buffer#(
     //tagbank connections
     logic [INDEX_WIDTH - 1 : 0]w1_index;
     logic [TAG_WIDTH - 1 : 0]w1_tag_data;
-	 logic [INDEX_WIDTH - 1 : 0]w2_index;
+	logic [INDEX_WIDTH - 1 : 0]w2_index;
     logic [TAG_WIDTH - 1 : 0]w2_tag_data;
     always_comb
 	begin
         tagbank_wdata = w2_tag_data;
         tagbank_waddr = w2_index;
-		  tagbank_we[0] = ~w2_select_way ? we_reg :1'b0;
-        tagbank_we[1] = w2_select_way ? we_reg :1'b0;
+		  tagbank_we[0] = ~w2_select_way ? we_btb :1'b0;
+        tagbank_we[1] = w2_select_way ? we_btb :1'b0;
 		  
 		  tagbank_raddr = i_index_next;
 	end
 
     //targetbank connections
     logic [ADDR_WIDTH - 1 : 0]w_target_data;
-   always_comb
+    always_comb
 	begin
         targetbank_wdata = w_target_data;
         targetbank_waddr = w2_index;
-		  targetbank_we[0] = ~w2_select_way ? we_reg :1'b0;
-        targetbank_we[1] = w2_select_way ? we_reg :1'b0;
+		  targetbank_we[0] = ~w2_select_way ? we_btb :1'b0;
+        targetbank_we[1] = w2_select_way ? we_btb :1'b0;
 		  
 		  targetbank_raddr = i_index_next;
 	end
@@ -148,9 +148,8 @@ module branch_target_buffer#(
 		r_target = targetbank_rdata[r_select_way];
 	end
 	
-	logic we_reg;
 	
-   always_ff @(posedge clk)
+    always_ff @(posedge clk)
 	begin
 		if(~rst_n)
 		begin
@@ -172,8 +171,7 @@ module branch_target_buffer#(
 					  
             end
 				//set valid bit on a write(will be valid cycle after write)
-				we_reg<= we_btb;
-				valid_bits[w2_index][w2_select_way] <=we_reg;
+				valid_bits[w2_index][w2_select_way] <=we_btb;
 				//data for write (will write cycle after miss and branch confirm)
             w2_tag_data <= w1_tag_data;  
             w2_index <= w1_index;
