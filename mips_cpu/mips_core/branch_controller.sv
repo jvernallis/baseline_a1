@@ -9,6 +9,7 @@
  * See wiki page "Branch and Jump" for details.
  */
 `include "mips_core.svh"
+`include "g_share"
 
 module branch_controller (
 	input clk,    // Clock
@@ -38,6 +39,15 @@ module branch_controller (
 		.i_fb_prediction (ex_branch_result.prediction),
 		.i_fb_outcome    (ex_branch_result.outcome)
 	);
+
+	g_share(
+		.clk,
+		.rst_n,
+		.we_bp(),
+		.branch_taken(),
+		.write_pc(),
+		.pred
+	)
 
 	always_comb
 	begin

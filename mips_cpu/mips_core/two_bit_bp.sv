@@ -2,16 +2,16 @@
 
 module two_bit_bp#(
     parameter INDEX_WIDTH = 4,
-    ADDR_WIDTH = 26
+    parameter ADDR_WIDTH = 26
 )(
-    input  clk,    // Clock
-    input  rst_n,  // Synchronous reset active low
-    input we_bp,
-    input update_res,
-    input logic[ADDR_WIDTH-1:0] write_pc,
+    input  clk,         // Clock
+    input  rst_n,       // Synchronous reset active low
+    input we_bp,        //when dwcode resoves that instr was a branch
+    input valid_branch, //from decode; if the pranch presdiction was correct
+    input logic[ADDR_WIDTH-1:0] write_pc,//from decode, current_pc
     output logic pred,
 
-    pc_ifc.in i_pc_current
+    pc_ifc.in i_pc_next
     
     //counter signals
 );
@@ -21,7 +21,7 @@ logic [INDEX_WIDTH-1:0] index;
 logic [INDEX_WIDTH-1:0] index_write; 
 logic [COUNTER_WIDTH-1:0] current_counter;
 
-assign index = i_pc_current.pc[INDEX_WIDTH-1:0];
+assign index = i_pc_next.pc[INDEX_WIDTH-1:0];
 assign current_counter = counter_regs[index];
 assign index_write = write_pc[INDEX_WIDTH-1:0];
 
@@ -35,12 +35,12 @@ always_ff@(posedge clk)
 begin
     if(~rst_n) begin
         for (int i=0; i<INDEX_WIDTH;i++)begin
-            counter_regs[i] <= 'b11;
+            counter_regs[i] <= 'b10;
         end
     end
 	 else begin
 		if(we_bp) begin
-        unique case({current_counter,update_res})
+        unique case({current_counter,valid_branch})
             'b000: begin
                 counter_regs[index_write] <= 'b00;
             end
