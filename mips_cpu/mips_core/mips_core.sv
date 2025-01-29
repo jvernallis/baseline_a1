@@ -56,6 +56,7 @@ module mips_core (
 	pc_ifc if_pc_current();
 	pc_ifc if_pc_next();
 	cache_output_ifc if_i_cache_output();
+	branch_prediction_ifc if_branch_prediction();
 
 	// ==== IF to DEC
 	pc_ifc i2d_pc();
@@ -125,6 +126,8 @@ module mips_core (
 		.i_hc         (i2i_hc),
 		.i_load_pc    (load_pc),
 
+		.branch_fetch()
+
 		.o_pc_current (if_pc_current),
 		.o_pc_next    (if_pc_next)
 	);
@@ -145,6 +148,7 @@ module mips_core (
 
 	// defparam D_CACHE.INDEX_WIDTH = 9,
 	// 	D_CACHE.BLOCK_OFFSET_WIDTH = 2;
+
 
 	// ========================================================================
 	// ==== IF to DEC
@@ -299,6 +303,7 @@ module mips_core (
 		.clk, .rst_n,
 
 		.if_i_cache_output,
+		.if_branch_prediction,
 		.dec_pc(i2d_pc),
 		.dec_branch_decoded,
 		.ex_pc(d2e_pc),

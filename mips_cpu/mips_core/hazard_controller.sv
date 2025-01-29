@@ -26,13 +26,14 @@ module hazard_controller (
 
 	// Feedback from IF
 	cache_output_ifc.in if_i_cache_output,
-	// Feedback from DEC
+	branch_prediction_ifc.out if_branch_prediction,
 	pc_ifc.in dec_pc,
-	branch_decoded_ifc.hazard dec_branch_decoded,
+	branch_decoded_ifc.in dec_branch_decoded,
 	// Feedback from EX
 	pc_ifc.in ex_pc,
 	input lw_hazard,
-	branch_result_ifc.in ex_branch_result,
+	// Branch resolution now happens in decode stage
+	// branch_result_ifc.in ex_branch_result,
 	// Feedback from MEM
 	input mem_done,
 
@@ -52,15 +53,21 @@ module hazard_controller (
 		.dec_pc,
 		.dec_branch_decoded,
 		.ex_pc,
-		.ex_branch_result
 	);
 
 	// We have total 6 potential hazards
 	logic ic_miss;			// I cache miss
 	// Gone without delay slots:
 	//logic ds_miss;			// Delay slot miss
-	logic dec_overload;		// Branch predict taken or Jump
-	logic ex_overload;		// Branch prediction wrong
+	// Gone with branch resolution moved to decode
+	//logic dec_overload;		// Branch predict taken or Jump
+
+	// "Branch prediction wrong now entails:"
+	// Incorrect prediction as to if it was/wasn't a branch,
+	// Incorrect target prediction,
+	// Incorrect decision prediction
+	// And the overload now happens in dec.
+	logic dec_overload;		// Branch prediction wrong
 	//    lw_hazard;		// Load word hazard (input from forward unit)
 	logic dc_miss;			// D cache miss
 
@@ -69,11 +76,17 @@ module hazard_controller (
 	begin
 		ic_miss = ~if_i_cache_output.valid;
 		//ds_miss = ic_miss & dec_branch_decoded.valid;
-		dec_overload = dec_branch_decoded.valid
-			& (dec_branch_decoded.is_jump
-				| (dec_branch_decoded.prediction == TAKEN));
-		ex_overload = ex_branch_result.valid
-			& (ex_branch_result.prediction != ex_branch_result.outcome);
+		// dec_overload = dec_branch_decoded.valid
+		// 	& (dec_branch_decoded.is_jump
+		// 		| (dec_branch_decoded.prediction == TAKEN));
+		dec_overload = 
+			(dec_branch_decoded.valid != dec_branch_decoded.valid_prediction) | 
+			(dec_branch_decoded.valid &
+				(
+					(dec_branch_decoded.target_prediction != dec_branch_decoded.target) |
+					(dec_branch_decoded.prediction != dec_branch_decoded.outcome)
+				)
+			);
 		// lw_hazard is determined by forward unit.
 		dc_miss = ~mem_done;
 	end
@@ -200,6 +213,8 @@ module hazard_controller (
 		// if (ds_miss) stats_event("ds_miss");
 		if (dec_overload) stats_event("dec_overload");
 		if (ex_overload) stats_event("ex_overload");
+		if (branch_encounter_dec) stats_event("branch_encounter_dec");
+		if (branch_encounter_ex) stats_event("branch_encounter_ex");
 		if (lw_hazard) stats_event("lw_hazard");
 		if (dc_miss) stats_event("dc_miss");
 		if (if_stall) stats_event("if_stall");

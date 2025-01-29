@@ -26,6 +26,13 @@ module fetch_unit (
 	// Load pc
 	load_pc_ifc.in i_load_pc,
 
+	// Branch prediction interface.
+	// Determines the next PC, from last cycle's prediction.
+	// FIXME: I'm using this interface to register values in fetch.
+	// We are using these values for sequential logic to determine next_pc;
+	// and then next_pc is used to deteremine these values for the next cycle.
+	branch_prediction_ifc.in branch_fetch,
+
 	// Output pc
 	pc_ifc.out o_pc_current,
 	pc_ifc.out o_pc_next

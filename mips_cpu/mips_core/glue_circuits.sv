@@ -10,6 +10,12 @@
  */
 `include "mips_core.svh"
 
+module fetch_stage_glue (
+	//Nonzero chance that we need this. Leaving empty for now.
+);
+
+endmodule
+
 module decode_stage_glue (
 	decoder_output_ifc.in i_decoded,
 	reg_file_output_ifc.in i_reg_data,

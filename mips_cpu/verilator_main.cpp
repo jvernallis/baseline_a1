@@ -43,7 +43,7 @@ void signal_handler(int signal)
     interrupt = signal;
 }
 
-std::unordered_map<std::string, unsigned int> stats;
+std::map<std::string, unsigned int> stats;
 
 void stats_event(const char *e)
 {
