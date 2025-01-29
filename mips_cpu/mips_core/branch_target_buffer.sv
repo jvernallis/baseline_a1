@@ -3,7 +3,7 @@
 module branch_target_buffer#(
     parameter INDEX_WIDTH = 4,
     parameter ASSOCIATIVITY = 2,
-	 ADDR_WIDTH = 26)(
+	parameter ADDR_WIDTH = 26)(
    // General signals
     input  clk,    // Clock
     input  rst_n,  // Synchronous reset active low
@@ -136,10 +136,10 @@ module branch_target_buffer#(
 	begin
         targetbank_wdata = w_target_data;
         targetbank_waddr = w2_index;
-		  targetbank_we[0] = ~w2_select_way ? we_btb :1'b0;
+		targetbank_we[0] = ~w2_select_way ? we_btb :1'b0;
         targetbank_we[1] = w2_select_way ? we_btb :1'b0;
 		  
-		  targetbank_raddr = i_index_next;
+		targetbank_raddr = i_index_next;
 	end
     //read outputs
     always_comb
