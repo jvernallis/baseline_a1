@@ -23,9 +23,9 @@
 	 branch_result_ifc.in ex_branch_result
  );
 	 logic request_prediction;
-	/*
+	
 	 // Change the following line to switch predictor
-	 branch_predictor_2bit PREDICTOR (
+	 branch_predictor_gshare PREDICTOR (
 		 .clk, .rst_n,
  
 		 .i_req_valid     (request_prediction),
@@ -37,17 +37,17 @@
 		 .i_fb_pc         (ex_pc.pc),
 		 .i_fb_prediction (ex_branch_result.prediction),
 		 .i_fb_outcome    (ex_branch_result.outcome)
-	 );*/
- 
-	 g_share PREDICTOR(
-		 .clk,
-		 .rst_n,
-		 .we_bp(dec_branch_decoded.valid),
-		 .fb_pred(ex_branch_result.outcome),
-		 .write_pc(ex_pc.pc),
-		 .read_pc(dec_pc.pc),
-		 .pred(dec_branch_decoded.prediction)
 	 );
+ 
+	//  g_share PREDICTOR(
+	// 	 .clk,
+	// 	 .rst_n,
+	// 	 .we_bp(dec_branch_decoded.valid),
+	// 	 .fb_pred(ex_branch_result.outcome),
+	// 	 .write_pc(ex_pc.pc),
+	// 	 .read_pc(dec_pc.pc),
+	// 	 .pred(dec_branch_decoded.prediction)
+	//  );
  
 	 always_comb
 	 begin
@@ -243,7 +243,6 @@
  assign global_history_out = global_history_reg;
  
  endmodule
- 
 
  module branch_predictor_always_not_taken (
 	 input clk,    // Clock
@@ -327,3 +326,92 @@
  
  endmodule
  
+
+ module branch_predictor_gshare (
+	 input clk,    // Clock
+	 input rst_n,  // Synchronous reset active low
+ 
+	 // Request
+	 input logic i_req_valid,
+	 input logic [`ADDR_WIDTH - 1 : 0] i_req_pc,
+	 input logic [`ADDR_WIDTH - 1 : 0] i_req_target,
+	 output mips_core_pkg::BranchOutcome o_req_prediction,
+ 
+	 // Feedback
+	 input logic i_fb_valid,
+	 input logic [`ADDR_WIDTH - 1 : 0] i_fb_pc,
+	 input mips_core_pkg::BranchOutcome i_fb_prediction,
+	 input mips_core_pkg::BranchOutcome i_fb_outcome
+ );
+	localparam COUNTER_WIDTH = 2;
+	localparam INDEX_WIDTH = 16;
+
+	logic [INDEX_WIDTH-1:0] index_read; 
+	logic [INDEX_WIDTH-1:0] index_write; 
+	logic [INDEX_WIDTH-1:0] ghr;
+	logic [INDEX_WIDTH-1:0] old_ghr;
+	logic [COUNTER_WIDTH-1:0] current_counter;
+ 
+	// logic [1:0] counter;
+
+	logic [COUNTER_WIDTH-1:0] counter_regs[2**INDEX_WIDTH];
+ 
+	 task incr;
+		 begin
+			 if (counter_regs[index_write] != 2'b11)
+				 counter_regs[index_write] <= counter_regs[index_write] + 2'b01;
+		 end
+	 endtask
+ 
+	 task decr;
+		 begin
+			 if (counter_regs[index_write] != 2'b00)
+				 counter_regs[index_write] <= counter_regs[index_write] - 2'b01;
+		 end
+	 endtask
+
+ 
+	 always_ff @(posedge clk)
+	 begin
+		 if(~rst_n)
+		 begin
+			 //counter <= 2'b01;	// Weakly not taken
+		 end
+		 else
+		 begin
+			index_write <= index_read;
+
+			if (i_fb_valid)
+			begin
+				// for (int i=1; i<INDEX_WIDTH; i++)
+				// begin
+				// 	ghr[i] <= ghr[i-1];
+				// end
+				// ghr[0] <= i_fb_outcome;
+
+				 case (i_fb_outcome)
+					 NOT_TAKEN: decr();
+					 TAKEN:     incr();
+				 endcase
+			end
+			// else begin
+			// 	ghr <= ghr;
+			// end
+		 end
+	 end
+ 
+	 always_comb
+	 begin
+		if (i_fb_valid)
+		begin
+			for (int i=1; i<INDEX_WIDTH; i++)
+				begin
+					ghr[i] = ghr[i-1];
+				end
+			ghr[0] = i_fb_outcome;
+		end
+
+		 index_read = i_req_pc[INDEX_WIDTH-1:0] ^ ghr;
+		 o_req_prediction = counter_regs[index_read][1] ? TAKEN : NOT_TAKEN;
+	 end
+ endmodule
