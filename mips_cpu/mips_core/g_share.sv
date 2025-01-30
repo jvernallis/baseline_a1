@@ -7,12 +7,13 @@ module g_share#(
     input  clk,         // Clock
     input  rst_n,       // Synchronous reset active low
     input we_bp,        //when decode resoves that instr was a branch
-    input valid_branch, //from decode; if the pranch prediction was correct
+    input correct_branch, //from decode; if the pranch prediction was correct
     input fb_pred,      //from decode : prediction that was made
     input logic[ADDR_WIDTH-1:0] write_pc,//from decode, current_pc
-    output logic pred,
+    input logic[ADDR_WIDTH-1:0] read_pc,
+    output mips_core_pkg::BranchOutcome pred
 
-    pc_ifc.in i_pc_next
+    //pc_ifc.in i_pc_next
     
     //counter signals
 );
@@ -41,13 +42,18 @@ assign index_write = write_pc[INDEX_WIDTH-1:0];
 always_comb begin
     //xor to fold down history and pc to index length
     for (int i=0; i<INDEX_WIDTH;i++)begin
-        index = i_pc_next.pc[i] ^ global_history[i];
+        index = read_pc[i] ^ global_history[i];
     end
     //prediction is reader form msb of counter
-    pred = counter_regs[index][1];
+	 if(counter_regs[index][1]) begin
+		pred = TAKEN;
+	 end
+    else begin
+		pred = NOT_TAKEN;
+	 end
     //direction of increment for the counter(based on the branch prediction and the valifity of prediction)
     //from decode
-    counter_dir = ~(valid_branch ^ fb_pred);
+    counter_dir = ~(correct_branch ^ fb_pred);
 end
 
 logic [COUNTER_WIDTH-1:0] counter_regs[INDEX_WIDTH-1:0];
