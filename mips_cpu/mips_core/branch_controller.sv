@@ -38,16 +38,11 @@
 		 .i_fb_prediction (ex_branch_result.prediction),
 		 .i_fb_outcome    (ex_branch_result.outcome)
 	 );*/
-	 logic correct_branch;
-	 assign correct_branch = (ex_branch_result.outcome ==ex_branch_result.prediction);
  
-	 g_share#(
-		.INDEX_WIDTH(10),
-	) PREDICTOR(
+	 g_share PREDICTOR(
 		 .clk,
 		 .rst_n,
 		 .we_bp(dec_branch_decoded.valid),
-		 .correct_branch(correct_branch),
 		 .fb_pred(ex_branch_result.outcome),
 		 .write_pc(ex_pc.pc),
 		 .read_pc(dec_pc.pc),
@@ -67,6 +62,8 @@
 
  endmodule
  
+
+
  `include "mips_core.svh"
 
  module g_share#(
@@ -76,7 +73,6 @@
 	 input  clk,         // Clock
 	 input  rst_n,       // Synchronous reset active low
 	 input we_bp,        //when decode resoves that instr was a branch
-	 input correct_branch, //from decode; if the pranch prediction was correct
 	 input fb_pred,      //from decode : prediction that was made
 	 input logic[ADDR_WIDTH-1:0] write_pc,//from decode, current_pc
 	 input logic[ADDR_WIDTH-1:0] read_pc,
@@ -104,19 +100,18 @@
  logic [INDEX_WIDTH-1:0] index_write; 
  logic [COUNTER_WIDTH-1:0] current_counter;
  logic counter_dir;
- logic default_encounter;
  
+ assign  index = read_pc[INDEX_WIDTH-1:0];
  assign current_counter = counter_regs[index];
  assign index_write = write_pc[INDEX_WIDTH-1:0];
  
  always_comb begin
 	 //xor to fold down history and pc to index length
-	 /*for (int i=0; i<INDEX_WIDTH;i++)begin
-		 index[i] = read_pc[i] ;//^ global_history[i];
-	 end*/
-	 index = read_pc[INDEX_WIDTH-1:0];
+	 //for (int i=0; i<INDEX_WIDTH;i++)begin
+		 //^ global_history[i];
+	 //end
 	 //prediction is reader form msb of counter
-	  if(counter_regs[index][1]) begin
+	  if(current_counter[1]) begin
 		 pred = TAKEN;
 	  end
 	 else begin
@@ -124,71 +119,96 @@
 	  end
 	 //direction of increment for the counter(based on the branch prediction and the valifity of prediction)
 	 //from decode
-	//  counter_dir =fb_pred;
+	 counter_dir = fb_pred ;
  end
  
- logic [COUNTER_WIDTH-1:0] counter_regs[INDEX_WIDTH-1:0];
+ logic [COUNTER_WIDTH-1:0] counter_regs[2**INDEX_WIDTH];
+ logic we_reg;
  
  always_ff@(posedge clk)
  begin
 	 if(~rst_n) begin
-		 for (int i=0; i<64;i++)begin
-			 counter_regs[i] <= 'b01;
+		 for (int i=0; i<16;i++)begin
+			 counter_regs[i] <= 'b10;
 		 end
 	 end
 	  else begin
-		 if(we_bp) begin
-		 unique case({current_counter,fb_pred})
+		 if(we_reg) begin
+		 unique case({current_counter,counter_dir})
 			 'b000: begin
 				 counter_regs[index_write] <= 'b00;
-				 default_encounter <= 'b0;
 			 end
 			 'b001:begin
 				 counter_regs[index_write] <= 'b01;
-				 default_encounter <= 'b0;
 			 end
 			 'b010: begin
 				 counter_regs[index_write] <= 'b00;
-				 default_encounter <= 'b0;
 			 end
 			 'b011:begin
 				 counter_regs[index_write] <= 'b10;
-				 default_encounter <= 'b0;
 			 end
 			 'b100: begin
 				 counter_regs[index_write] <= 'b01;
-				 default_encounter <= 'b1;
 			 end
 			 'b101:begin
 				 counter_regs[index_write] <= 'b11;
-				 default_encounter <= 'b1;
 			 end
 			 'b110: begin
 				 counter_regs[index_write] <= 'b10;
-				 default_encounter <= 'b0;
 			 end
 			 'b111:begin
 				 counter_regs[index_write] <= 'b11;
-				 default_encounter <= 'b0;
 			 end
 		 endcase 
 	 end
 	 else begin
-		counter_regs <=  counter_regs;
+		counter_regs <= counter_regs;
 	 end
+	 we_reg <= we_bp;
+	 end
+ end
+ `ifdef SIMULATION
+	always_ff @(posedge clk)
+	begin
+		if (we_reg && counter_dir) stats_event("branch");
+	end
+`endif
+ endmodule
+ 
+ module ghr#(
+	 parameter GHR_DEPTH = 4
+ )(
+	 input  clk,                   // Clock
+	 input  rst_n,                 // Synchronous reset active low
+	 input logic we_ghr,           //we from ghr will be the same as the we_bp
+	 input logic branch_taken,     //if the branch was taken(from decode)
+	 output logic global_history_out[GHR_DEPTH-1:0]
+ );
+ logic global_history_reg [GHR_DEPTH-1:0];
+ 
+ always_ff@(posedge clk)begin
+	 if(~rst_n) begin
+		 for (int i=0; i<GHR_DEPTH;i++)begin
+			 global_history_reg[i] <= 'b0;
+		 end
+	 end
+	 else begin
+		 if(we_ghr)begin
+			 for (int i=1; i<GHR_DEPTH;i++)begin
+				 global_history_reg[i] <= global_history_reg[i-1];
+			 end
+			 global_history_reg[0] <= branch_taken;
+		 end
+		 else begin
+			 global_history_reg <= global_history_reg;
+		 end
 	 end
  end
  
- `ifdef SIMULATION
- always_ff @(posedge clk)
- begin
-	 if (we_bp) stats_event("we_ghr");
-	 if (we_bp & default_encounter) stats_event("default_encounter");
-	 //if (counter_dir) stats_event("dir");
- end
-`endif
-
+ assign global_history_out = global_history_reg;
+ 
  endmodule
+ 
  
  module ghr#(
 	 parameter GHR_DEPTH = 4
