@@ -61,12 +61,13 @@ module mips_core (
 	// ==== IF to DEC
 	pc_ifc i2d_pc();
 	cache_output_ifc i2d_inst();
+	branch_prediction_ifc i2d_pred();
 
 	// |||| DEC Stage
 	decoder_output_ifc dec_decoder_output();
 	reg_file_output_ifc dec_reg_file_output();
 	reg_file_output_ifc dec_forward_unit_output();
-	branch_decoded_ifc dec_branch_decoded();
+	branch_resolution_ifc dec_branch_resolved();
 	alu_input_ifc dec_alu_input();
 	alu_pass_through_ifc dec_alu_pass_through();
 
@@ -126,8 +127,6 @@ module mips_core (
 		.i_hc         (i2i_hc),
 		.i_load_pc    (load_pc),
 
-		.branch_fetch()
-
 		.o_pc_current (if_pc_current),
 		.o_pc_next    (if_pc_next)
 	);
@@ -143,6 +142,18 @@ module mips_core (
 
 		.out          (if_i_cache_output)
 	);
+
+	branch_controller BRANCH_CONTROLLER(
+		.clk, .rst_n,
+
+		.if_pc		  			(if_pc_next),
+		.if_branch_prediction	(if_branch_prediction),
+		
+		//FIXME: resolution goes here.
+		//Pretty sure we can resolve branch in decode and put it back in here...
+		.dec_pc					(d2e_pc),
+		.branch_result_ifc		()
+	)
 	// If you want to change the line size and total size of instruction cache,
 	// uncomment the following two lines and change the parameter.
 
@@ -157,8 +168,9 @@ module mips_core (
 		.clk, .rst_n,
 		.i_hc(i2d_hc),
 
-		.i_pc   (if_pc_current),     .o_pc   (i2d_pc),
-		.i_inst (if_i_cache_output), .o_inst (i2d_inst)
+		.i_pc   (if_pc_current),     	.o_pc   (i2d_pc),
+		.i_inst (if_i_cache_output), 	.o_inst (i2d_inst),
+		.i_pred (if_branch_prediction),	.o_pred	(i2d_pred)
 	);
 
 	// ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -191,6 +203,13 @@ module mips_core (
 
 		.out         (dec_forward_unit_output),
 		.o_lw_hazard (lw_hazard)
+	);
+
+	branch_resolver BRANCH_RESOLVER(
+		.i_decoded	(dec_decoder_output),
+		.i_reg_data	(dec_reg_file_output),
+
+		.o_branch_resolution (dec_branch_resolved)
 	);
 
 	decode_stage_glue DEC_STAGE_GLUE(

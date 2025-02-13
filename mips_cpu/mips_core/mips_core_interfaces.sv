@@ -32,7 +32,7 @@ interface cache_output_ifc ();
 	modport out (output valid, data);
 endinterface
 
-// Modification: Similar to branch_decoded_ifc
+// Note: Similar to branch_decoded_ifc
 // This interface predicts a branch - but now, its validity and target are predicted,
 // instead of decoded.
 interface branch_prediction_ifc ();
@@ -53,26 +53,18 @@ interface branch_prediction_ifc ();
 	// 	input valid, is_jump, target);
 endinterface
 
-// Replacement for branch_result_ifc.
-// This interface fully resolves a branch - filling in information about its validity,
+// Note: Replacement for branch_result_ifc.
+// This interface is the resolution of a branch - filling in information about its validity,
 // target, and decision.
-// FIXME: I'm passing through all the predicted values so that we can use them for comparisons
-// in hazard_controller. Check if this is correct/elegant.
-
-interface branch_decode_ifc ();
-	logic valid_prediction; // High means the instruction is a branch or a jump
-	logic valid; // High means the instruction is a branch or a jump
-	logic [`ADDR_WIDTH - 1 : 0] target_prediction;
-	logic [`ADDR_WIDTH - 1 : 0] target; //We need this now, since the decoded target may be
-	// different than the predicted one.
-	mips_core_pkg::BranchOutcome prediction;
-	mips_core_pkg::BranchOutcome outcome;
+interface branch_resolution_ifc ();
+	logic valid; // High means the instruction was decoded to be a branch or a jump
+	logic [`ADDR_WIDTH - 1 : 0] target; // The decoded branch target
+	mips_core_pkg::BranchOutcome prediction; // The predicted branch decision
+	mips_core_pkg::BranchOutcome outcome; // The evaluated branch decision
 	logic [`ADDR_WIDTH - 1 : 0] recovery_target;
 
-	modport in  (input valid_prediction, valid, target_prediction, 
-		target, prediction, outcome, recovery_target);
-	modport out  (input valid_prediction, valid, target_prediction, 
-		target, prediction, outcome, recovery_target);
+	modport in  (input valid, target, prediction, outcome, recovery_target);
+	modport out  (input valid, target, prediction, outcome, recovery_target);
 endinterface
 
 interface alu_pass_through_ifc ();

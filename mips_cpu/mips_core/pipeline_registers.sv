@@ -23,7 +23,10 @@ module pr_i2d (
 	pc_ifc.out o_pc,
 
 	cache_output_ifc.in  i_inst,
-	cache_output_ifc.out o_inst
+	cache_output_ifc.out o_inst,
+
+	branch_prediction_ifc.in i_pred,
+	branch_prediction_ifc.out o_pred
 );
 
 	always_ff @(posedge clk)
@@ -33,6 +36,10 @@ module pr_i2d (
 			o_pc.pc <= '0;
 			o_inst.valid <= 1'b0;
 			o_inst.data <= '0;
+			o_pred.valid <= 1'b0;
+			o_pred.target <= '0;
+			o_pred.prediction <= '0;
+			o_pred.recovery_target <= '0;
 		end
 		else
 		begin
@@ -43,12 +50,20 @@ module pr_i2d (
 					o_pc.pc <= '0;
 					o_inst.valid <= 1'b0;
 					o_inst.data <= '0;
+					o_pred.valid <= 1'b0;
+					o_pred.target <= '0;
+					o_pred.prediction <= '0;
+					o_pred.recovery_target <= '0;
 				end
 				else
 				begin
 					o_pc.pc <= i_pc.pc;
 					o_inst.valid <= i_inst.valid;
 					o_inst.data <= i_inst.data;
+					o_pred.valid <= i_pred.valid;
+					o_pred.target <= i_pred.target;
+					o_pred.prediction <= i_pred.prediction;
+					o_pred.recovery_target <= i_pred.recovery_target;
 				end
 			end
 		end
