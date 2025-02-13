@@ -278,6 +278,7 @@ module decoder (
 							out.is_branch_jump = 1'b1;
 							out.is_jump = 1'b1;
 							out.is_jump_reg = 1'b1;
+							// $display("Instruction with pc %h decoded to be a JR", i_pc.pc);
 						end
 
 						6'h09:  //jalr
@@ -289,6 +290,7 @@ module decoder (
 							out.is_branch_jump = 1'b1;
 							out.is_jump = 1'b1;
 							out.is_jump_reg = 1'b1;
+							// $display("Instruction with pc %h decoded to be a JALR", i_pc.pc);
 						end
 
 						6'h18:  // mul
@@ -389,6 +391,7 @@ module decoder (
 					rt();
 					out.is_branch_jump = 1'b1;
 					out.branch_target = i_pc.pc + `ADDR_WIDTH'd4 + `ADDR_WIDTH'(signed'(i_inst.data[15:0]) << 2);
+					// $display("Instruction with pc %h decoded to be a BEQ", i_pc.pc);
 				end
 
 				6'h05:  //bne
@@ -398,6 +401,7 @@ module decoder (
 					rt();
 					out.is_branch_jump = 1'b1;
 					out.branch_target = i_pc.pc + `ADDR_WIDTH'd4 + `ADDR_WIDTH'(signed'(i_inst.data[15:0]) << 2);
+					// $display("Instruction with pc %h decoded to be a BNE", i_pc.pc);
 				end
 
 				6'h06:  //blez
@@ -407,18 +411,23 @@ module decoder (
 					rt();
 					out.is_branch_jump = 1'b1;
 					out.branch_target = i_pc.pc + `ADDR_WIDTH'd4 + `ADDR_WIDTH'(signed'(i_inst.data[15:0]) << 2);
+					// $display("Instruction with pc %h decoded to be a BLEZ", i_pc.pc);
 				end
 
 				6'h01:  //bgez or bltz
 				begin
-					if( i_inst.data[16] )
+					if( i_inst.data[16] ) begin
 						out.alu_ctl = ALUCTL_BGEZ;
-					else
+						// $display("Instruction with pc %h decoded to be a BGEZ", i_pc.pc);
+					end else begin
 						out.alu_ctl = ALUCTL_BLTZ;
+						// $display("Instruction with pc %h decoded to be a BLTZ", i_pc.pc);
+					end
 					rs();
 					rt();
 					out.is_branch_jump = 1'b1;
 					out.branch_target = i_pc.pc + `ADDR_WIDTH'd4 + `ADDR_WIDTH'(signed'(i_inst.data[15:0]) << 2);
+					
 				end
 
 				6'h07:  //bgtz
@@ -428,6 +437,7 @@ module decoder (
 					rt();
 					out.is_branch_jump = 1'b1;
 					out.branch_target = i_pc.pc + `ADDR_WIDTH'd4 + `ADDR_WIDTH'(signed'(i_inst.data[15:0]) << 2);
+					// $display("Instruction with pc %h decoded to be a BGTZ", i_pc.pc);
 				end
 
 				6'h02:  // j
@@ -436,6 +446,7 @@ module decoder (
 					out.is_branch_jump = 1'b1;
 					out.is_jump = 1'b1;
 					out.branch_target = {i_inst.data[`ADDR_WIDTH - 3: 0], 2'b00};
+					// $display("Instruction with pc %h decoded to be a J", i_pc.pc);
 				end
 
 				6'h03:  // jal
@@ -446,6 +457,8 @@ module decoder (
 					out.is_branch_jump = 1'b1;
 					out.is_jump = 1'b1;
 					out.branch_target = {i_inst.data[`ADDR_WIDTH - 3: 0], 2'b00};
+					// $display("Instruction with pc %h decoded to be a JAL", i_pc.pc);
+					// $display("The output alu ctl is now set to %d", out.alu_ctl);
 				end
 
 				6'h20: //lb
@@ -554,5 +567,6 @@ module decoder (
 				end
 			endcase
 		end
+
 	end
 endmodule

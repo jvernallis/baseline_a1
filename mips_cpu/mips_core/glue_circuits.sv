@@ -20,7 +20,8 @@ module decode_stage_glue (
 	decoder_output_ifc.in i_decoded,
 	reg_file_output_ifc.in i_reg_data,
 
-	branch_decoded_ifc.decode branch_decoded,	// Contains both i/o
+	//branch_decoded_ifc.decode branch_decoded,	// Contains both i/o
+	branch_resolution_ifc.out branch_resolved,
 
 	alu_input_ifc.out o_alu_input,
 	alu_pass_through_ifc.out o_alu_pass_through
@@ -35,16 +36,20 @@ module decode_stage_glue (
 			? i_decoded.immediate
 			: i_reg_data.rt_data;
 
-		branch_decoded.valid =   i_decoded.is_branch_jump;
-		branch_decoded.is_jump = i_decoded.is_jump;
-		branch_decoded.target =  i_decoded.is_jump_reg
-			? i_reg_data.rs_data[`ADDR_WIDTH - 1 : 0]
-			: i_decoded.branch_target;
+		// branch_decoded.valid =   i_decoded.is_branch_jump;
+		// branch_decoded.is_jump = i_decoded.is_jump;
+		// branch_decoded.target =  i_decoded.is_jump_reg
+		// 	? i_reg_data.rs_data[`ADDR_WIDTH - 1 : 0]
+		// 	: i_decoded.branch_target;
 
+		branch_resolved.valid = i_decoded.is_branch_jump;
+		branch_resolved.target = i_decoded.is_jump_reg
+		 	? i_reg_data.rs_data[`ADDR_WIDTH - 1 : 0]
+		 	: i_decoded.branch_target;
 
-		o_alu_pass_through.is_branch =     i_decoded.is_branch_jump & ~i_decoded.is_jump;
-		o_alu_pass_through.prediction =    branch_decoded.prediction;
-		o_alu_pass_through.recovery_target = branch_decoded.recovery_target;
+		// o_alu_pass_through.is_branch =     i_decoded.is_branch_jump & ~i_decoded.is_jump;
+		// o_alu_pass_through.prediction =    branch_decoded.prediction;
+		// o_alu_pass_through.recovery_target = branch_decoded.recovery_target;
 
 		o_alu_pass_through.is_mem_access = i_decoded.is_mem_access;
 		o_alu_pass_through.mem_action =    i_decoded.mem_action;
@@ -60,18 +65,18 @@ module ex_stage_glue (
 	alu_output_ifc.in i_alu_output,
 	alu_pass_through_ifc.in i_alu_pass_through,
 
-	branch_result_ifc.out o_branch_result,
+	//branch_result_ifc.out o_branch_result,
 	d_cache_input_ifc.out o_d_cache_input,
 	d_cache_pass_through_ifc.out o_d_cache_pass_through
 );
 
 	always_comb
 	begin
-		o_branch_result.valid = i_alu_output.valid
-			& i_alu_pass_through.is_branch;
-		o_branch_result.prediction = i_alu_pass_through.prediction;
-		o_branch_result.outcome =    i_alu_output.branch_outcome;
-		o_branch_result.recovery_target =     i_alu_pass_through.recovery_target;
+		// o_branch_result.valid = i_alu_output.valid
+		// 	& i_alu_pass_through.is_branch;
+		// o_branch_result.prediction = i_alu_pass_through.prediction;
+		// o_branch_result.outcome =    i_alu_output.branch_outcome;
+		// o_branch_result.recovery_target =     i_alu_pass_through.recovery_target;
 
 		o_d_cache_input.valid =      i_alu_pass_through.is_mem_access;
 		o_d_cache_input.mem_action = i_alu_pass_through.mem_action;

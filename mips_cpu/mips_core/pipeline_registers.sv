@@ -23,7 +23,10 @@ module pr_i2d (
 	pc_ifc.out o_pc,
 
 	cache_output_ifc.in  i_inst,
-	cache_output_ifc.out o_inst
+	cache_output_ifc.out o_inst,
+
+	branch_prediction_ifc.in i_pred,
+	branch_prediction_ifc.out o_pred
 );
 
 	always_ff @(posedge clk)
@@ -33,6 +36,9 @@ module pr_i2d (
 			o_pc.pc <= '0;
 			o_inst.valid <= 1'b0;
 			o_inst.data <= '0;
+			o_pred.valid <= 1'b0;
+			o_pred.target <= '0;
+			o_pred.prediction <= NOT_TAKEN;
 		end
 		else
 		begin
@@ -43,12 +49,18 @@ module pr_i2d (
 					o_pc.pc <= '0;
 					o_inst.valid <= 1'b0;
 					o_inst.data <= '0;
+					o_pred.valid <= 1'b0;
+					o_pred.target <= '0;
+					o_pred.prediction <= NOT_TAKEN;
 				end
 				else
 				begin
 					o_pc.pc <= i_pc.pc;
 					o_inst.valid <= i_inst.valid;
 					o_inst.data <= i_inst.data;
+					o_pred.valid <= i_pred.valid;
+					o_pred.target <= i_pred.target;
+					o_pred.prediction <= i_pred.prediction;
 				end
 			end
 		end
@@ -83,9 +95,9 @@ module pr_d2e (
 			o_alu_input.op2 <= '0;
 
 
-			o_alu_pass_through.is_branch <= 1'b0;
-			o_alu_pass_through.prediction <= NOT_TAKEN;
-			o_alu_pass_through.recovery_target <= '0;
+			// o_alu_pass_through.is_branch <= 1'b0;
+			// o_alu_pass_through.prediction <= NOT_TAKEN;
+			// o_alu_pass_through.recovery_target <= '0;
 
 			o_alu_pass_through.is_mem_access <= 1'b0;
 			o_alu_pass_through.mem_action <= READ;
@@ -109,9 +121,9 @@ module pr_d2e (
 					o_alu_input.op2 <= '0;
 
 
-					o_alu_pass_through.is_branch <= 1'b0;
-					o_alu_pass_through.prediction <= NOT_TAKEN;
-					o_alu_pass_through.recovery_target <= '0;
+					// o_alu_pass_through.is_branch <= 1'b0;
+					// o_alu_pass_through.prediction <= NOT_TAKEN;
+					// o_alu_pass_through.recovery_target <= '0;
 
 					o_alu_pass_through.is_mem_access <= 1'b0;
 					o_alu_pass_through.mem_action <= READ;
@@ -131,9 +143,8 @@ module pr_d2e (
 					o_alu_input.op2 <= i_alu_input.op2;
 
 
-					o_alu_pass_through.is_branch <= i_alu_pass_through.is_branch;
-					o_alu_pass_through.prediction <= i_alu_pass_through.prediction;
-					o_alu_pass_through.recovery_target <= i_alu_pass_through.recovery_target;
+					// o_alu_pass_through.is_branch <= i_alu_pass_through.is_branch;
+					// o_alu_pass_through.prediction <= i_alu_pass_through.prediction;
 
 					o_alu_pass_through.is_mem_access <= i_alu_pass_through.is_mem_access;
 					o_alu_pass_through.mem_action <= i_alu_pass_through.mem_action;

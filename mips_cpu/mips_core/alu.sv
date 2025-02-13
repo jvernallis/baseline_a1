@@ -25,10 +25,10 @@ endinterface
 interface alu_output_ifc ();
 	logic valid;
 	logic [`DATA_WIDTH - 1 : 0] result;
-	mips_core_pkg::BranchOutcome branch_outcome;
+	//mips_core_pkg::BranchOutcome branch_outcome;
 
-	modport in  (input valid, result, branch_outcome);
-	modport out (output valid, result, branch_outcome);
+	modport in  (input valid, result);
+	modport out (output valid, result);
 endinterface
 
 module alu (
@@ -41,7 +41,7 @@ module alu (
 	begin
 		out.valid = 1'b0;
 		out.result = '0;
-		out.branch_outcome = NOT_TAKEN;
+		//out.branch_outcome = NOT_TAKEN;
 		done = 1'b0;
 
 		if (in.valid)
@@ -89,13 +89,18 @@ module alu (
 				`endif
 				end
 
-				ALUCTL_BA:   out.branch_outcome = TAKEN;
-				ALUCTL_BEQ:  out.branch_outcome = in.op1 == in.op2     ? TAKEN : NOT_TAKEN;
-				ALUCTL_BNE:  out.branch_outcome = in.op1 != in.op2     ? TAKEN : NOT_TAKEN;
-				ALUCTL_BLEZ: out.branch_outcome = in.op1 <= signed'(0) ? TAKEN : NOT_TAKEN;
-				ALUCTL_BGTZ: out.branch_outcome = in.op1 > signed'(0)  ? TAKEN : NOT_TAKEN;
-				ALUCTL_BGEZ: out.branch_outcome = in.op1 >= signed'(0) ? TAKEN : NOT_TAKEN;
-				ALUCTL_BLTZ: out.branch_outcome = in.op1 < signed'(0)  ? TAKEN : NOT_TAKEN;
+				// ALUCTL_BA:   out.branch_outcome = TAKEN;
+				// ALUCTL_BEQ:  out.branch_outcome = in.op1 == in.op2     ? TAKEN : NOT_TAKEN;
+				// ALUCTL_BNE:  out.branch_outcome = in.op1 != in.op2     ? TAKEN : NOT_TAKEN;
+				// ALUCTL_BLEZ: out.branch_outcome = in.op1 <= signed'(0) ? TAKEN : NOT_TAKEN;
+				// ALUCTL_BGTZ: out.branch_outcome = in.op1 > signed'(0)  ? TAKEN : NOT_TAKEN;
+				// ALUCTL_BGEZ: out.branch_outcome = in.op1 >= signed'(0) ? TAKEN : NOT_TAKEN;
+				// ALUCTL_BLTZ: out.branch_outcome = in.op1 < signed'(0)  ? TAKEN : NOT_TAKEN;
+
+				ALUCTL_BA, ALUCTL_BEQ, ALUCTL_BNE, ALUCTL_BLEZ, ALUCTL_BGTZ, ALUCTL_BGEZ, ALUCTL_BLTZ:
+				begin
+					//These are not illegal operations, but they are resolved in decode and thus don't need processing
+				end
 
 				default:
 				begin
