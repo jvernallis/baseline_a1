@@ -25,13 +25,7 @@ module fetch_unit (
 
 	// Load pc
 	load_pc_ifc.in i_load_pc,
-
-	// Branch prediction interface.
-	// Determines the next PC, from last cycle's prediction.
-	// FIXME: I'm using this interface to register values in fetch.
-	// We are using these values for sequential logic to determine next_pc;
-	// and then next_pc is used to deteremine these values for the next cycle.
-	branch_prediction_ifc.in branch_fetch,
+	branch_prediction_ifc.in i_branch_prediction,
 
 	// Output pc
 	pc_ifc.out o_pc_current,
@@ -40,12 +34,20 @@ module fetch_unit (
 
 	always_comb
 	begin
-		if (!i_hc.stall)
-			o_pc_next.pc = i_load_pc.we
-				? i_load_pc.new_pc
-				: o_pc_current.pc + `ADDR_WIDTH'd4;
-		else
+		if (!i_hc.stall) begin
+			if(i_load_pc.we) begin
+				o_pc_next.pc = i_load_pc.new_pc;
+			end
+			else
+			begin
+				if(i_branch_prediction.valid & i_branch_prediction.prediction)
+					o_pc_next.pc = i_branch_prediction.target;
+				else
+					o_pc_next.pc = o_pc_current.pc + `ADDR_WIDTH'd4;
+			end
+		end else begin
 			o_pc_next.pc = o_pc_current.pc;
+		end
 	end
 
 	always_ff @(posedge clk)

@@ -26,15 +26,15 @@ module hazard_controller (
 
 	// Feedback from IF
 	cache_output_ifc.in if_i_cache_output,
-	branch_prediction_ifc.out if_branch_prediction,
+	// Note: This is the prediction that was made in last cycle's fetch, 
+	// which is to be checked against the resolution made in this cycle's decode.
+	branch_prediction_ifc.in dec_branch_prediction, 
+	// Feedback from DEC
 	pc_ifc.in dec_pc,
-	branch_decoded_ifc.in dec_branch_decoded,
+	branch_resolution_ifc.in dec_branch_resolved,
 	// Feedback from EX
 	pc_ifc.in ex_pc,
 	input lw_hazard,
-	// Branch resolution now happens in decode stage
-	// branch_result_ifc.in ex_branch_result,
-	// Feedback from MEM
 	input mem_done,
 
 	// Hazard control output
@@ -47,13 +47,13 @@ module hazard_controller (
 	// Load pc output
 	load_pc_ifc.out load_pc
 );
-
-	branch_controller BRANCH_CONTROLLER (
-		.clk, .rst_n,
-		.dec_pc,
-		.dec_branch_decoded,
-		.ex_pc,
-	);
+	// Branch controller moved to MIPS core
+	// branch_controller BRANCH_CONTROLLER (
+	// 	.clk, .rst_n,
+	// 	.dec_pc,
+	// 	.dec_branch_resolved,
+	// 	.ex_pc,
+	// );
 
 	// We have total 6 potential hazards
 	logic ic_miss;			// I cache miss
@@ -75,19 +75,15 @@ module hazard_controller (
 	always_comb
 	begin
 		ic_miss = ~if_i_cache_output.valid;
-		//ds_miss = ic_miss & dec_branch_decoded.valid;
-		// dec_overload = dec_branch_decoded.valid
-		// 	& (dec_branch_decoded.is_jump
-		// 		| (dec_branch_decoded.prediction == TAKEN));
-		dec_overload = 
-			(dec_branch_decoded.valid != dec_branch_decoded.valid_prediction) | 
-			(dec_branch_decoded.valid &
-				(
-					(dec_branch_decoded.target_prediction != dec_branch_decoded.target) |
-					(dec_branch_decoded.prediction != dec_branch_decoded.outcome)
-				)
-			);
-		// lw_hazard is determined by forward unit.
+		//ds_miss = ic_miss & dec_branch_resolved.valid;
+		// dec_overload = dec_branch_resolved.valid
+		// 	& (dec_branch_resolved.is_jump
+		// 		| (dec_branch_resolved.prediction == TAKEN));
+
+		// Overloaded needed only if the wrong path was taken
+		dec_overload =
+			((dec_branch_prediction.valid & dec_branch_prediction.prediction) != (dec_branch_resolved.valid & dec_branch_resolved.outcome)) |
+			((dec_branch_resolved.valid & dec_branch_resolved.outcome) & (dec_branch_prediction.target != dec_branch_resolved.target));
 		dc_miss = ~mem_done;
 	end
 
@@ -135,13 +131,14 @@ module hazard_controller (
 			if_flush = 1'b1;
 		end
 
-		if (ex_overload)
-		begin
-			if_stall = 1'b0;
-			if_flush = 1'b1;
-		end
+		// if (ex_overload)
+		// begin
+		// 	if_stall = 1'b0;
+		// 	if_flush = 1'b1;
+		// end
 
-		if(dec_overload) begin
+		if(dec_overload) 
+		begin
 			if_stall = 1'b0;
 			if_flush = 1'b1;
 		end
@@ -165,8 +162,8 @@ module hazard_controller (
 		if (ex_stall)
 			dec_stall = 1'b1;
 
-		if(ex_overload)
-			dec_flush = 1'b1;
+		// if(ex_overload)
+		// 	dec_flush = 1'b1;
 	end
 
 	always_comb
@@ -199,11 +196,9 @@ module hazard_controller (
 	// Derive the load_pc
 	always_comb
 	begin
-		load_pc.we = dec_overload | ex_overload;
-		if (dec_overload)
-			load_pc.new_pc = dec_branch_decoded.target;
-		else
-			load_pc.new_pc = ex_branch_result.recovery_target;
+		load_pc.we = dec_overload;
+		// Not always true.
+		load_pc.new_pc = dec_branch_resolved.target;
 	end
 
 `ifdef SIMULATION
@@ -212,9 +207,7 @@ module hazard_controller (
 		if (ic_miss) stats_event("ic_miss");
 		// if (ds_miss) stats_event("ds_miss");
 		if (dec_overload) stats_event("dec_overload");
-		if (ex_overload) stats_event("ex_overload");
-		if (branch_encounter_dec) stats_event("branch_encounter_dec");
-		if (branch_encounter_ex) stats_event("branch_encounter_ex");
+		// if (ex_overload) stats_event("ex_overload");
 		if (lw_hazard) stats_event("lw_hazard");
 		if (dc_miss) stats_event("dc_miss");
 		if (if_stall) stats_event("if_stall");
