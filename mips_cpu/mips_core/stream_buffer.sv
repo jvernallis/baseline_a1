@@ -1,8 +1,11 @@
+
 module stream_buffer#(
     parameter BLOCK_OFFSET_WIDTH = 2,
     parameter LINE_SIZE = 4,
     parameter BUFF_DATA_WIDTH = `ADDR_WIDTH,
+    parameter MEMID = 0,
     parameter BUFFER_LEN = 4
+
     
 )(
     input logic clk,
@@ -100,7 +103,7 @@ always_comb
             {BLOCK_OFFSET_WIDTH + 2{1'b0}}};
         mem_read_address.ARLEN = LINE_SIZE;
         mem_read_address.ARVALID = state == STATE_REFILL_REQUEST;
-        mem_read_address.ARID = 4'd0;
+        mem_read_address.ARID = MEMID;
 
         // Always ready to consume data
         mem_read_data.RREADY = 1'b1;
