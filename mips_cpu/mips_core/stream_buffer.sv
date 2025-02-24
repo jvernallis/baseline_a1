@@ -1,3 +1,4 @@
+
 module stream_buffer#(
     parameter BLOCK_OFFSET_WIDTH = 2,
     parameter LINE_SIZE = 4,
@@ -12,18 +13,11 @@ module stream_buffer#(
     input logic [`ADDR_WIDTH-3:0] current_addr,  //cache access address
     input logic cache_miss,
     input logic miss_valid,
-
-    input logic arready,
-    input logic rvalid,
-    input [`DATA_WIDTH-1:0] rdata,
-
     output logic hit_out,                       //if there is a hit in the stream buffer    
     output logic [`DATA_WIDTH-1:0] sb_rdata[LINE_SIZE],
 
-    output logic arvalid,
-    output logic [3:0] arid,
-    output logic[3:0] arlen,
-    output logic[`ADDR_WIDTH-1:0] araddr,
+    axi_read_address.master mem_read_address,
+     axi_read_data.master mem_read_data
 );
     // States
     enum logic[1:0] {
@@ -98,28 +92,31 @@ begin
     miss = ~hit;
     all_miss = miss & cache_miss_reg & miss_valid;
     last_refill_word = databank_select[LINE_SIZE - 1]
-        & rvalid;
+        & mem_read_data.RVALID;
 end
 
 logic[`ADDR_WIDTH-BLOCK_OFFSET_WIDTH-3:0] mem_addr;
 always_comb
     begin
         mem_addr = (current_addr_reg + (buff_tail));
-        araddr = {mem_addr,
+        mem_read_address.ARADDR = {mem_addr,
             {BLOCK_OFFSET_WIDTH + 2{1'b0}}};
-        arlen = LINE_SIZE;
-        arvalid = state == STATE_REFILL_REQUEST;
-        arid = MEMID;
+        mem_read_address.ARLEN = LINE_SIZE;
+        mem_read_address.ARVALID = state == STATE_REFILL_REQUEST;
+        mem_read_address.ARID = MEMID;
+
+        // Always ready to consume data
+        mem_read_data.RREADY = 1'b1;
     end
 
     always_comb
     begin
-        if (rvalid)
+        if (mem_read_data.RVALID)
             databank_we = databank_select;
         else
             databank_we = '0;
 
-        databank_wdata = rdata;
+        databank_wdata = mem_read_data.RDATA;
         databank_waddr = buff_tail[$clog2(BUFFER_LEN)-1:0];
         databank_raddr = buff_head[$clog2(BUFFER_LEN)-1:0];
     end
@@ -149,11 +146,11 @@ always_comb
         next_state = state;
         tail_at_end = ((buff_tail - buff_head) == BUFFER_LEN);
         unique case (state)
-            //only come out of READY when both cache and stream buffer miss or done prefecting
+            //only come out of READY when both cache and stream buffer miss
             STATE_READY:
                 next_state =  (all_miss | ~tail_at_end) ? STATE_REFILL_REQUEST : STATE_READY; 
             STATE_REFILL_REQUEST:
-               if (arready)
+               if (mem_read_address.ARREADY)
                     next_state = STATE_REFILL_DATA;
             STATE_REFILL_DATA: begin
                 if(last_refill_word)
@@ -161,7 +158,7 @@ always_comb
                 end
         endcase
     end
-    logic cache_miss_reg;
+    logic hit_prev,cache_miss_reg;
     always_ff @(posedge clk)
     begin
         if(~rst_n)
@@ -176,6 +173,7 @@ always_comb
         else
         begin
             state <= next_state;
+            hit_prev <= hit;
             cache_miss_reg <= cache_miss;
             
                
@@ -200,7 +198,7 @@ always_comb
                 end
                 STATE_REFILL_DATA:
                 begin
-                    if (rvalid)
+                    if (mem_read_data.RVALID)
                     begin
                         databank_select <= {databank_select[LINE_SIZE - 2 : 0],
                             databank_select[LINE_SIZE - 1]};

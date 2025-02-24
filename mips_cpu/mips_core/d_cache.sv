@@ -41,7 +41,8 @@
  module d_cache #(
 	 parameter INDEX_WIDTH = 6,  // 2 * 1 KB Cache Size 
 	 parameter BLOCK_OFFSET_WIDTH = 2,
-	 parameter ASSOCIATIVITY = 2
+	 parameter ASSOCIATIVITY = 2,
+	 parameter SB_COUNT = 2
 	 )(
 	 // General signals
 	 input clk,    // Clock
@@ -57,8 +58,8 @@
 	 axi_write_address.master mem_write_address,
 	 axi_write_data.master mem_write_data,
 	 axi_write_response.master mem_write_response,
-	 axi_read_address.master mem_read_address,
-	 axi_read_data.master mem_read_data
+	 axi_read_address.master mem_read_address[SB_COUNT],
+	 axi_read_data.master mem_read_data[SB_COUNT]
  );
 	 localparam TAG_WIDTH = `ADDR_WIDTH - INDEX_WIDTH - BLOCK_OFFSET_WIDTH - 2;
 	 localparam LINE_SIZE = 1 << BLOCK_OFFSET_WIDTH;
@@ -399,66 +400,64 @@
     output logic hit_out,                       //if there is a hit in the stream buffer    
     output logic [`DATA_WIDTH-1:0] sb_rdata[LINE_SIZE],
 
-    axi_read_address.master mem_read_address,
-     axi_read_data.master mem_read_data
+    axi_read_address.master mem_read_address[SB_COUNT],
+     axi_read_data.master mem_read_data[SB_COUNT]
 );
-
-	logic arready[SB_COUNT], 
-		rvalid[SB_COUNT],
-		arvalid[SB_COUNT];
-	logic [3:0] arid[SB_COUNT],
-				arlen[SB_COUNT];
-	logic [`ADDR_WIDTH-1:0] araddr[SB_COUNT];
-	logic [`DATA_WIDTH-1:0] rdata[SB_COUNT];
-
+	
 	logic hit_out_g[SB_COUNT];
 	logic [`DATA_WIDTH-1:0]sb_rdata_g[SB_COUNT][LINE_SIZE];
 
-	always_comb 
+	//valid miss signal to tell which stream buffer to reallocate
+	logic lru_rp;
+	logic miss_valid_g[SB_COUNT];
+	//round robin value for value fetching
+	logic pref_select;
+	//allocation bit for each buffer
+	logic sb_alloc[SB_COUNT];
+	/*
+	always_ff@(posedge clk)
 	begin
-		
-		arready[0] = mem_read_address.ARREADY;
-		rvalid[0] = mem_read_data.RVALID;
-		rdata[0] = mem_read_data.RDATA; 
-
-		mem_read_address.ARID = arid[0];
-		mem_read_address.ARLEN = arlen[0];
-		mem_read_address.ARVALID = arvalid[0];
-		mem_read_address.ARADDR = araddr[0];
-
-		mem_read_data.RREADY = 'b1;
+		if(~rst_n)
+		begin
+			for (int i=0; i<SB_COUNT;i++) begin
+				sb_alloc[i] <= 'b0;
+			end
+			pref_select <= 'b0;
+		end
+		else
+		begin
+			sb_alloc <= ~hit_out_g
+		end
 	end
-
+	*/
+	
+	
 	always_comb 
 	begin
+		miss_valid_g[0] = miss_valid;
 		hit_out = hit_out_g[0];
 		sb_rdata = sb_rdata_g[0];
 	end
-
+	
 	genvar g;
 	generate
-		for (g=0; g< SB_COUNT; g++)
+		for (g=0; g< 1; g++)
 		begin: stream_buffers
 			stream_buffer#(
 			.BLOCK_OFFSET_WIDTH,
 			.LINE_SIZE,
 			.BUFF_DATA_WIDTH,
-			.MEMID
+			.MEMID(g+1)
 		)SB_D(
 			.clk,
-			.rst_n,
+			.rst_n(rst_n /*& sb_alloc[g]*/),
 			.current_addr,
 			.cache_miss,
-			.miss_valid,
+			.miss_valid(miss_valid_g[g]),
 			.hit_out(hit_out_g[g]),
 			.sb_rdata(sb_rdata_g[g]),
-			.arready(arready[g]),
-			.rvalid(rvalid[g]),
-			.rdata(rdata[g]),
-			.arvalid(arvalid[g]),
-			.arid(arid[g]),
-			.arlen(arlen[g]),
-			.araddr(araddr[g])
+			.mem_read_address(mem_read_address[g]),
+			.mem_read_data(mem_read_data[g])
 		);
 		end
 	endgenerate
