@@ -182,7 +182,6 @@
 			 & (state == STATE_READY);
 		 miss = in.valid & ~hit;
 		 last_flush_word = databank_select[LINE_SIZE - 1] & mem_write_data.WVALID;
-		 //last_refill_word = databank_select[LINE_SIZE - 1] & mem_read_data.RVALID;
 	 
 		 if (hit)
 		 begin
@@ -220,17 +219,7 @@
 		 // Always ready to consume write response
 		 mem_write_response.BREADY = 1'b1;
 	 end
- /*
-	 always_comb begin
-		 mem_read_address.ARADDR = {r_tag, r_index, {BLOCK_OFFSET_WIDTH + 2{1'b0}}};
-		 mem_read_address.ARLEN = LINE_SIZE;
-		 mem_read_address.ARVALID = state == STATE_REFILL_REQUEST;
-		 mem_read_address.ARID = 4'd1;
- 
-		 // Always ready to consume data
-		 mem_read_data.RREADY = 1'b1;
-	 end
- */
+
 	 always_comb
 	 begin
 		 for (int i=0; i<ASSOCIATIVITY;i++)
@@ -374,12 +363,12 @@
 		 end
 	 end
  
-	 stream_buffer#(
+	 sb_group#(
 		  .BLOCK_OFFSET_WIDTH(BLOCK_OFFSET_WIDTH),
 		  .LINE_SIZE(LINE_SIZE),
 		  .BUFF_DATA_WIDTH(`DATA_WIDTH),
 		  .MEMID(1)
-	  )SB_D(
+	  )SB_G(
 		  .clk,
 		  .rst_n(rst_n),
 		  .current_addr({r_tag,r_index,2'b0}),
@@ -391,4 +380,88 @@
 		  .mem_read_data
 	  );
  endmodule
+ 
+ module sb_group#(
+    parameter BLOCK_OFFSET_WIDTH = 2,
+    parameter LINE_SIZE = 4,
+    parameter BUFF_DATA_WIDTH = `ADDR_WIDTH,
+    parameter MEMID = 0,
+    parameter BUFFER_LEN = 4,
+	parameter SB_COUNT = 2
+
+    
+)(
+    input logic clk,
+    input rst_n,
+    input logic [`ADDR_WIDTH-3:0] current_addr,  //cache access address
+    input logic cache_miss,
+    input logic miss_valid,
+    output logic hit_out,                       //if there is a hit in the stream buffer    
+    output logic [`DATA_WIDTH-1:0] sb_rdata[LINE_SIZE],
+
+    axi_read_address.master mem_read_address,
+     axi_read_data.master mem_read_data
+);
+
+	logic arready[SB_COUNT], 
+		rvalid[SB_COUNT],
+		arvalid[SB_COUNT];
+	logic [3:0] arid[SB_COUNT],
+				arlen[SB_COUNT];
+	logic [`ADDR_WIDTH-1:0] araddr[SB_COUNT];
+	logic [`DATA_WIDTH-1:0] rdata[SB_COUNT];
+
+	logic hit_out_g[SB_COUNT];
+	logic [`DATA_WIDTH-1:0]sb_rdata_g[SB_COUNT][LINE_SIZE];
+
+	always_comb 
+	begin
+		
+		arready[0] = mem_read_address.ARREADY;
+		rvalid[0] = mem_read_data.RVALID;
+		rdata[0] = mem_read_data.RDATA; 
+
+		mem_read_address.ARID = arid[0];
+		mem_read_address.ARLEN = arlen[0];
+		mem_read_address.ARVALID = arvalid[0];
+		mem_read_address.ARADDR = araddr[0];
+
+		mem_read_data.RREADY = 'b1;
+	end
+
+	always_comb 
+	begin
+		hit_out = hit_out_g[0];
+		sb_rdata = sb_rdata_g[0];
+	end
+
+	genvar g;
+	generate
+		for (g=0; g< SB_COUNT; g++)
+		begin: stream_buffers
+			stream_buffer#(
+			.BLOCK_OFFSET_WIDTH,
+			.LINE_SIZE,
+			.BUFF_DATA_WIDTH,
+			.MEMID
+		)SB_D(
+			.clk,
+			.rst_n,
+			.current_addr,
+			.cache_miss,
+			.miss_valid,
+			.hit_out(hit_out_g[g]),
+			.sb_rdata(sb_rdata_g[g]),
+			.arready(arready[g]),
+			.rvalid(rvalid[g]),
+			.rdata(rdata[g]),
+			.arvalid(arvalid[g]),
+			.arid(arid[g]),
+			.arlen(arlen[g]),
+			.araddr(araddr[g])
+		);
+		end
+	endgenerate
+endmodule
+
  
