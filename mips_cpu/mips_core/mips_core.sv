@@ -132,8 +132,8 @@ module mips_core (
 	i_cache I_CACHE(
 		.clk, .rst_n,
 
-		.mem_read_address(mem_read_address[0]),
-		.mem_read_data   (mem_read_data[0]),
+		.mem_read_address(mem_read_address[1:2]),
+		.mem_read_data   (mem_read_data[1:2]),
 
 		.i_pc_current (if_pc_current),
 		.i_pc_next    (if_pc_next),
@@ -256,8 +256,8 @@ module mips_core (
 		.in(e2m_d_cache_input),
 		.out(mem_d_cache_output),
 
-		.mem_read_address(mem_read_address[1:2]),
-		.mem_read_data   (mem_read_data[1:2]),
+		.mem_read_address(mem_read_address[0]),
+		.mem_read_data   (mem_read_data[0]),
 
 		.mem_write_address(mem_write_address[0]),
 		.mem_write_data(mem_write_data[0]),

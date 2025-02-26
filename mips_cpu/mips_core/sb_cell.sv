@@ -1,4 +1,3 @@
-
 module sb_cell#(
     parameter BLOCK_OFFSET_WIDTH = 2,
     parameter LINE_SIZE = 4,
@@ -102,7 +101,7 @@ always_comb
     begin
         cell_rdata = databank_rdata;
         cell_rtag = tagbank_rdata;
-        available = last_refill_word;
+        available = last_refill_word & (state != STATE_STALE);
         ar_valid = mem_read_address.ARVALID;
     end
 always_comb
