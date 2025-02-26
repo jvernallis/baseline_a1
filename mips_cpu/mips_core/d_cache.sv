@@ -81,6 +81,10 @@
 	 logic [INDEX_WIDTH - 1 : 0] i_index_next;
 	 logic sb_hit;
 	 logic [`DATA_WIDTH-1:0] sb_rdata[LINE_SIZE];
+	 //test
+	 logic d35,w35;
+	 assign d35 = (databank_raddr == 'h35) && (i_block_offset=='b11);
+	 assign w35 =  (databank_waddr == 'h35) && (i_block_offset=='b11);
  
 	 assign {i_tag, i_index, i_block_offset} = in.addr[`ADDR_WIDTH - 1 : 2];
 	 assign i_index_next = in.addr_next[BLOCK_OFFSET_WIDTH + 2 +: INDEX_WIDTH];
@@ -387,8 +391,8 @@
     parameter LINE_SIZE = 4,
     parameter BUFF_DATA_WIDTH = `ADDR_WIDTH,
     parameter MEMID = 0,
-    parameter BUFFER_LEN = 4,
-	parameter SB_COUNT = 2
+    parameter BUFFER_LEN = 2,
+	parameter SB_COUNT = 1
 
     
 )(
@@ -400,10 +404,10 @@
     output logic hit_out,                       //if there is a hit in the stream buffer    
     output logic [`DATA_WIDTH-1:0] sb_rdata[LINE_SIZE],
 
-    axi_read_address.master mem_read_address[SB_COUNT],
-     axi_read_data.master mem_read_data[SB_COUNT]
+    axi_read_address.master mem_read_address[2],
+     axi_read_data.master mem_read_data[2]
 );
-	
+	logic [$clog2(SB_COUNT)-1:0] output_sel;
 	logic hit_out_g[SB_COUNT];
 	logic [`DATA_WIDTH-1:0]sb_rdata_g[SB_COUNT][LINE_SIZE];
 
@@ -430,18 +434,59 @@
 		end
 	end
 	*/
-	
-	
+	logic a;
+	always_comb
+	begin
+		output_sel = 0;
+		for(int i = 0 ; i < SB_COUNT; i++) begin
+			if(hit_out_g[i])
+				output_sel = i;
+		end
+	end
+
+	enum logic [2:0] {
+		SB_0,            
+		SB_1    
+	} state, next_state;
+
+	always_ff@(posedge clk)
+	begin
+		if(~rst_n)begin
+			state <= SB_0;
+			
+		end
+		else begin
+			if(hit_out_g[0]) begin
+				state <= SB_1;
+			end
+			else if(hit_out_g[1]) begin
+				state <= SB_0;
+			end
+			else begin
+				state <= state;;
+			end
+			
+			if(state == SB_0)begin
+				miss_valid_g[0] <= miss_valid;
+				miss_valid_g[1] <= 'b0;
+			end
+			else if(state == SB_1)begin
+				miss_valid_g[0] <= miss_valid;
+				miss_valid_g[1] <= 'b0;
+			end
+			
+		end
+	end
+
 	always_comb 
 	begin
-		miss_valid_g[0] = miss_valid;
-		hit_out = hit_out_g[0];
-		sb_rdata = sb_rdata_g[0];
+		hit_out = hit_out_g.or();
+		sb_rdata = sb_rdata_g[output_sel];
 	end
 	
 	genvar g;
 	generate
-		for (g=0; g< 1; g++)
+		for (g=0; g< SB_COUNT; g++)
 		begin: stream_buffers
 			stream_buffer#(
 			.BLOCK_OFFSET_WIDTH,
@@ -456,8 +501,8 @@
 			.miss_valid(miss_valid_g[g]),
 			.hit_out(hit_out_g[g]),
 			.sb_rdata(sb_rdata_g[g]),
-			.mem_read_address(mem_read_address[g]),
-			.mem_read_data(mem_read_data[g])
+			.mem_read_address(mem_read_address),
+			.mem_read_data(mem_read_data)
 		);
 		end
 	endgenerate
