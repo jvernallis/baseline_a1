@@ -27,7 +27,8 @@
 
  module i_cache #(
 	 parameter INDEX_WIDTH = 6, // 1 KB Cahe size 
-	 parameter BLOCK_OFFSET_WIDTH = 2
+	 parameter BLOCK_OFFSET_WIDTH = 2,
+	 parameter BUFFER_LEN = 8
 	 )(
 	 // General signals
 	 input clk,    // Clock
@@ -41,8 +42,8 @@
 	 cache_output_ifc.out out,
  
 	 // Memory interface
-	 axi_read_address.master mem_read_address,
-	 axi_read_data.master mem_read_data
+	 axi_read_address.master mem_read_address[BUFFER_LEN],
+	 axi_read_data.master mem_read_data[BUFFER_LEN]
  );
 	 localparam TAG_WIDTH = `ADDR_WIDTH - INDEX_WIDTH - BLOCK_OFFSET_WIDTH - 2;
 	 localparam LINE_SIZE = 1 << BLOCK_OFFSET_WIDTH;
@@ -218,7 +219,8 @@
 	 stream_buffer#(
 		 .BLOCK_OFFSET_WIDTH(BLOCK_OFFSET_WIDTH),
 		 .LINE_SIZE(LINE_SIZE),
-		 .BUFF_DATA_WIDTH(`ADDR_WIDTH)
+		 .BUFF_DATA_WIDTH(`ADDR_WIDTH),
+		 .BUFFER_LEN(BUFFER_LEN)
 	 )SB(
 		 .clk,
 		 .rst_n,

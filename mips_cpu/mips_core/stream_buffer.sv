@@ -4,7 +4,7 @@ module stream_buffer#(
     parameter LINE_SIZE = 4,
     parameter BUFF_DATA_WIDTH = `ADDR_WIDTH,
     parameter MEMID = 0,
-    parameter BUFFER_LEN = 2
+    parameter BUFFER_LEN = 8
 
     
 )(
@@ -48,8 +48,8 @@ genvar g;
         for (g = 0; g < BUFFER_LEN; g++)
         begin : sb_cells
             sb_cell #(
-                .BUFFER_LEN(BUFFER_LEN),
-                .ID(g)
+                .SB_ID(g),
+                .MEM_ID(0)
             ) databank (
                 .clk,
                 .rst_n,
@@ -78,24 +78,11 @@ begin
 end
 
 
-    always_comb
-    begin
-        //databank_waddr = buff_tail[$clog2(BUFFER_LEN)-1:0];
-        databank_raddr = buff_head[$clog2(BUFFER_LEN)-1:0];
-    end
-/*
-    logic [`ADDR_WIDTH-BLOCK_OFFSET_WIDTH-3:0] buffer_tag;
-    always_comb
-    begin
-       //offset from the tail value for the tag
-        buffer_tag = current_addr_reg + (buff_tail);
+always_comb
+begin
+    databank_raddr = buff_head[$clog2(BUFFER_LEN)-1:0];
+end
 
-        tagbank_we = ar_valid[buff_tail[$clog2(BUFFER_LEN)-1:0]];
-        tagbank_wdata = {buffer_tag,2'b0};
-        tagbank_waddr = buff_tail[$clog2(BUFFER_LEN)-1:0];
-        tagbank_raddr = buff_head[$clog2(BUFFER_LEN)-1:0];
-    end
-*/
 //output logic
 always_comb
     begin

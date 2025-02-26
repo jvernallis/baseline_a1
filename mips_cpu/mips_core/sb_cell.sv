@@ -2,8 +2,8 @@ module sb_cell#(
     parameter BLOCK_OFFSET_WIDTH = 2,
     parameter LINE_SIZE = 4,
     parameter BUFF_DATA_WIDTH = `ADDR_WIDTH,
-    parameter BUFFER_LEN = 4,
-    parameter ID = 0 
+    parameter SB_ID = 0,
+    parameter MEM_ID 
 )(
     input logic clk,
     input rst_n,
@@ -25,8 +25,8 @@ module sb_cell#(
         STATE_REFILL_DATA,       // Missing on a read
         STATE_STALE
     } state, next_state;
-logic [BUFFER_LEN-1:0]memid;
-assign memid = 1 + ID;
+logic [3:0]memid;
+assign memid = MEM_ID + SB_ID ;
 logic last_refill_word;
 
 logic [LINE_SIZE - 1 : 0] databank_select;
