@@ -39,8 +39,9 @@ logic [`ADDR_WIDTH-BLOCK_OFFSET_WIDTH-3:0]current_addr_reg;
 
 logic [BUFFER_LEN - 1 : 0] databank_raddr;
 logic [`DATA_WIDTH - 1 : 0] databank_rdata [BUFFER_LEN][LINE_SIZE];
-logic [BUFFER_LEN-1:0] databank_available;
+logic  databank_available[BUFFER_LEN];
 logic [BUFFER_LEN-1:0] ar_valid;
+logic [`ADDR_WIDTH -1 : 0] tagbank_rdata[BUFFER_LEN];
 
 genvar g;
     generate
@@ -53,8 +54,10 @@ genvar g;
                 .clk,
                 .rst_n,
                 .cell_addr(current_addr_reg + buff_tail),
-                .cell_enable((state != STATE_READY)&&(buff_tail[$clog2(BUFFER_LEN)-1:0] == g)),
+                .cell_enable((state == STATE_REFILL_REQUEST)&&(buff_tail[$clog2(BUFFER_LEN)-1:0] == g)),
+                .cell_stale((state == STATE_READY) & all_miss),
                 .cell_rdata(databank_rdata[g]),
+                .cell_rtag(tagbank_rdata[g]),
                 .available(databank_available[g]),
                 .ar_valid(ar_valid[g]),
                 .mem_read_address(mem_read_address[g]),
@@ -63,29 +66,12 @@ genvar g;
         end
     endgenerate
 
-// tagbank signals
-logic tagbank_we;
-logic [`ADDR_WIDTH - 3 : 0] tagbank_wdata;
-logic [BUFFER_LEN - 1 : 0] tagbank_waddr;
-logic [BUFFER_LEN - 1 : 0] tagbank_raddr;
-logic [`ADDR_WIDTH - 3 : 0] tagbank_rdata;
-
-cache_bank #(
-    .DATA_WIDTH (`DATA_WIDTH),
-    .ADDR_WIDTH ($clog2(BUFFER_LEN))
-) tagbank (
-    .clk,
-    .i_we    (tagbank_we),
-    .i_wdata (tagbank_wdata),
-    .i_waddr (tagbank_waddr),
-    .i_raddr (tagbank_raddr),
-
-    .o_rdata (tagbank_rdata)
-);
+logic [`DATA_WIDTH-1:0] a;
 always_comb
 begin
+    a = tagbank_rdata[buff_head[$clog2(BUFFER_LEN)-1:0]];
     hit = available_bits[buff_head[$clog2(BUFFER_LEN)-1:0]]
-        & (current_addr[`ADDR_WIDTH-3:2] == tagbank_rdata[`ADDR_WIDTH-3:2]);
+        & (current_addr[`ADDR_WIDTH-3:2] == a);
 
     miss = ~hit;
     all_miss = miss & cache_miss_reg & miss_valid;
@@ -97,7 +83,7 @@ end
         //databank_waddr = buff_tail[$clog2(BUFFER_LEN)-1:0];
         databank_raddr = buff_head[$clog2(BUFFER_LEN)-1:0];
     end
-
+/*
     logic [`ADDR_WIDTH-BLOCK_OFFSET_WIDTH-3:0] buffer_tag;
     always_comb
     begin
@@ -109,7 +95,7 @@ end
         tagbank_waddr = buff_tail[$clog2(BUFFER_LEN)-1:0];
         tagbank_raddr = buff_head[$clog2(BUFFER_LEN)-1:0];
     end
-
+*/
 //output logic
 always_comb
     begin
@@ -125,19 +111,18 @@ always_comb
         unique case (state)
             //only come out of READY when both cache and stream buffer miss
             STATE_READY:
-                next_state =  (all_miss) ? STATE_REFILL_REQUEST : STATE_READY; 
+                next_state =  (all_miss | ~tail_at_end) ? STATE_REFILL_REQUEST : STATE_READY; 
             STATE_REFILL_REQUEST: begin
                 if(ar_valid[buff_tail[$clog2(BUFFER_LEN)-1:0]])
                     next_state = FETCH_CHECK;
                 end
             FETCH_CHECK:begin
-                //keep requesting from mem if stream buffer is not full
-                if(~tail_at_end) begin
-                    next_state = STATE_REFILL_REQUEST; 
-                end
                 //if the head has valid data return to ready
-                else if(available_bits[buff_head[$clog2(BUFFER_LEN)-1:0]]) begin
+                if(available_bits[buff_head[$clog2(BUFFER_LEN)-1:0]] & tail_at_end) begin
                     next_state = STATE_READY;
+                end
+                if(~tail_at_end) begin
+                    next_state = STATE_REFILL_REQUEST;
                 end
             end
         endcase
@@ -158,14 +143,24 @@ always_comb
             state <= next_state;
             cache_miss_reg <= cache_miss;
 
-            if(databank_available[buff_tail[$clog2(BUFFER_LEN)-1:0]])begin
-                available_bits[buff_tail[$clog2(BUFFER_LEN)-1:0]] <= 'b1;
+            if(databank_available.or()) begin
+                for(int i = 0; i < BUFFER_LEN;i++)begin
+                    available_bits[i] <= (databank_available[i]) ? 'b1:available_bits[i];
+                end
+            end
+            else if(hit)begin
+                buff_head <= buff_head +'b1;
+                available_bits[buff_head[$clog2(BUFFER_LEN)-1:0]] <= 'b0;
+            end    
+
+            if ((ar_valid[buff_tail[$clog2(BUFFER_LEN)-1:0]]) & (~tail_at_end))
+            begin
+                buff_tail <= buff_tail+'b1;
             end
                
             case (state)
                 STATE_READY:
                 begin
-                   buff_head <= buff_head + hit;
                    if (all_miss)
                        begin
                            current_addr_reg <= {current_addr[`ADDR_WIDTH - 3 : BLOCK_OFFSET_WIDTH]};
@@ -178,12 +173,8 @@ always_comb
                            current_addr_reg <= current_addr_reg;
                        end
                 end
-                STATE_REFILL_REQUEST:
+                STATE_REFILL_REQUEST,FETCH_CHECK:
                 begin
-                    if ((ar_valid[buff_tail[$clog2(BUFFER_LEN)-1:0]]) & (~tail_at_end))
-                    begin
-                        buff_tail <= buff_tail+'b1;
-                    end
                 end
             endcase
         end
