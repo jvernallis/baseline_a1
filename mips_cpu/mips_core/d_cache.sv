@@ -223,7 +223,7 @@ module d_cache #(
 		mem_read_address.ARADDR = {r_tag, r_index, {BLOCK_OFFSET_WIDTH + 2{1'b0}}};
 		mem_read_address.ARLEN = LINE_SIZE;
 		mem_read_address.ARVALID = state == STATE_REFILL_REQUEST;
-		mem_read_address.ARID = 4'd1;
+		mem_read_address.ARID = 4'd8;
 
 		// Always ready to consume data
 		mem_read_data.RREADY = 1'b1;

@@ -112,8 +112,8 @@ module mips_core (
 	axi_write_address mem_write_address[1]();
 	axi_write_data mem_write_data[1]();
 	axi_write_response mem_write_response[1]();
-	axi_read_address mem_read_address[2]();
-	axi_read_data mem_read_data[2]();
+	axi_read_address mem_read_address[9]();
+	axi_read_data mem_read_data[9]();
 
 
 	// ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -132,8 +132,8 @@ module mips_core (
 	i_cache I_CACHE(
 		.clk, .rst_n,
 
-		.mem_read_address(mem_read_address[0]),
-		.mem_read_data   (mem_read_data[0]),
+		.mem_read_address(mem_read_address[0:7]),
+		.mem_read_data   (mem_read_data[0:7]),
 
 		.i_pc_current (if_pc_current),
 		.i_pc_next    (if_pc_next),
@@ -256,8 +256,8 @@ module mips_core (
 		.in(e2m_d_cache_input),
 		.out(mem_d_cache_output),
 
-		.mem_read_address(mem_read_address[1]),
-		.mem_read_data   (mem_read_data[1]),
+		.mem_read_address(mem_read_address[8]),
+		.mem_read_data   (mem_read_data[8]),
 
 		.mem_write_address(mem_write_address[0]),
 		.mem_write_data(mem_write_data[0]),
@@ -317,7 +317,7 @@ module mips_core (
 	// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 	// xxxx Memory Arbiter
 	// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-	memory_arbiter #(.WRITE_MASTERS(1), .READ_MASTERS(2)) MEMORY_ARBITER (
+	memory_arbiter #(.WRITE_MASTERS(1), .READ_MASTERS(9)) MEMORY_ARBITER (
 		.clk, .rst_n,
 		.axi_write_address,
 		.axi_write_data,
