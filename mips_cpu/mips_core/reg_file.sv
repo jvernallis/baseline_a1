@@ -33,16 +33,17 @@ module reg_file (
 	// Output data
 	reg_file_output_ifc.out out
 );
+	/*dummy thread in i_decoded.thread_id*/
+	/*Cannot insure consitency when fine swaping threads in one program, so thread 1 is always slected*/
+	logic [`DATA_WIDTH - 1 : 0] regs [64];
 
-	logic [`DATA_WIDTH - 1 : 0] regs [32];
-
-	assign out.rs_data = i_decoded.uses_rs ? regs[i_decoded.rs_addr] : '0;
-	assign out.rt_data = i_decoded.uses_rt ? regs[i_decoded.rt_addr] : '0;
+	assign out.rs_data = i_decoded.uses_rs ? regs[{1'b1,i_decoded.rs_addr}] : '0;
+	assign out.rt_data = i_decoded.uses_rt ? regs[{1'b1,i_decoded.rt_addr}] : '0;
 
 	always_ff @(posedge clk) begin
 		if(i_wb.uses_rw)
 		begin
-			regs[i_wb.rw_addr] = i_wb.rw_data;
+			regs[{1'b1,i_wb.rw_addr}] = i_wb.rw_data;
 		end
 	end
 

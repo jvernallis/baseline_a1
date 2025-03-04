@@ -14,6 +14,9 @@
  * See wiki page "Synchronous Caches" for details.
  */
 `include "mips_core.svh"
+`ifdef SIMULATION
+import "DPI-C" function void thread_event (input int aThreadId);
+`endif
 
 module fetch_unit (
 	// General signals
@@ -31,18 +34,22 @@ module fetch_unit (
 	pc_ifc.out o_pc_current,
 	pc_ifc.out o_pc_next
 );
+	logic thread_id;
 
 	always_comb
 	begin
 		if (!i_hc.stall) begin
+			o_pc_next.thread_id = ~o_pc_current.thread_id;//dummy
 			if(i_load_pc.we) begin
 				o_pc_next.pc = i_load_pc.new_pc;
 				// $display("Fetch unit detected overload, loading next pc %h", o_pc_next.pc);
 			end
 			else
 			begin
-				if(i_branch_prediction.valid & i_branch_prediction.prediction)
+				if(i_branch_prediction.valid & i_branch_prediction.prediction)begin
 					o_pc_next.pc = i_branch_prediction.target;
+					
+				end
 				else
 					o_pc_next.pc = o_pc_current.pc + `ADDR_WIDTH'd4;
 			end
@@ -53,17 +60,28 @@ module fetch_unit (
 			// 	// $display("We have a problem here, next PC is 100. Current PC is %h", o_pc_current.pc);
 		end else begin
 			o_pc_next.pc = o_pc_current.pc;
+			
 		end
 	end
 
 	always_ff @(posedge clk)
 	begin
-		if(~rst_n)
+		if(~rst_n) begin
 			o_pc_current.pc <= '0;	// Start point of programs are always 0x0
+			o_pc_current.thread_id <= '0; //dummy
+			thread_id <= '0;
+		end
 		else
 		begin
 			o_pc_current.pc <= o_pc_next.pc;
+			o_pc_current.thread_id <= o_pc_next.thread_id;
 		end
 	end
 
+	`ifdef SIMULATION
+	always_ff @(posedge clk)
+	begin
+		if(o_pc_current.thread_id != o_pc_next.thread_id) thread_event(o_pc_next.thread_id);
+	end
+	`endif
 endmodule
