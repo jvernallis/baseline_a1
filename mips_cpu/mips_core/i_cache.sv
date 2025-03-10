@@ -34,6 +34,7 @@
 	 // General signals
 	 input clk,    // Clock
 	 input rst_n,  // Synchronous reset active low
+	 input thread_id,
  
 	 // Request
 	 pc_ifc.in i_pc_current,
@@ -273,6 +274,7 @@ endgenerate
 )SB_G(
 	.clk,
 	.rst_n(rst_n),
+	.thread_id,
 	.current_addr({r_tag,r_index,2'b0}),
 	.cache_miss(miss),
 	.miss_valid(STATE_REFILL_DATA == state),

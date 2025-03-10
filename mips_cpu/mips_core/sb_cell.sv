@@ -7,6 +7,7 @@ module sb_cell#(
 )(
     input logic clk,
     input rst_n,
+    input logic thread_id,
     input logic [`ADDR_WIDTH-3:0] cell_addr,
     input logic cell_enable,
     input logic cell_stale,
@@ -79,6 +80,8 @@ always_comb
         mem_addr = (cell_addr);
         mem_read_address.ARADDR = {mem_addr,
             {BLOCK_OFFSET_WIDTH + 2{1'b0}}};
+        // Experimental: Set memory address MSB to thread ID
+		mem_read_address.ARADDR = {thread_id, mem_read_address.ARADDR[`ADDR_WIDTH - 2 : 0]};
         mem_read_address.ARLEN = LINE_SIZE;
         mem_read_address.ARVALID = state == STATE_REFILL_REQUEST;
         mem_read_address.ARID = memid;

@@ -10,9 +10,9 @@
 `include "mips_core.svh"
 
 `ifdef SIMULATION
-import "DPI-C" function void pc_event (input int pc);
-import "DPI-C" function void wb_event (input int addr, input int data);
-import "DPI-C" function void ls_event (input int op, input int addr, input int data);
+import "DPI-C" function void pc_event (input int pc, input int thread_id);
+import "DPI-C" function void wb_event (input int addr, input int data, input int thread_id);
+import "DPI-C" function void ls_event (input int op, input int addr, input int data, input int thread_id);
 `endif
 
 module mips_core (
@@ -50,6 +50,9 @@ module mips_core (
 	input [3:0] RID,
 	input [`DATA_WIDTH - 1 : 0] RDATA
 );
+	// Super lame, but I'm just not going to have more than 1 active thread
+	// in the pipeline at any time. 
+	logic thread_id = 1;
 
 	// Interfaces
 	// |||| IF Stage
@@ -124,6 +127,7 @@ module mips_core (
 	// ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 	fetch_unit FETCH_UNIT(
 		.clk, .rst_n,
+		.thread_id,
 
 		.i_hc         (i2i_hc),
 		.i_load_pc    (load_pc),
@@ -135,6 +139,7 @@ module mips_core (
 
 	i_cache I_CACHE(
 		.clk, .rst_n,
+		.thread_id,
 
 		.mem_read_address(mem_read_address[0:7]),
 		.mem_read_data   (mem_read_data[0:7]),
@@ -186,6 +191,7 @@ module mips_core (
 
 	reg_file REG_FILE(
 		.clk,
+		.thread_id,
 
 		.i_decoded(dec_decoder_output),
 		.i_wb(m2w_write_back), // WB stage
@@ -249,6 +255,7 @@ module mips_core (
 	);
 
 	ex_stage_glue EX_STAGE_GLUE (
+		.thread_id,
 		.i_alu_output           (ex_alu_output),
 		.i_alu_pass_through     (d2e_alu_pass_through),
 
@@ -277,6 +284,7 @@ module mips_core (
 	// ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 	d_cache D_CACHE (
 		.clk, .rst_n,
+		.thread_id,
 
 		.in(e2m_d_cache_input),
 		.out(mem_d_cache_output),
@@ -402,22 +410,26 @@ module mips_core (
 			&& dec_decoder_output.valid
 			&& i2d_inst.data)
 		begin
-			pc_event(i2d_pc.pc);
+			pc_event(i2d_pc.pc, thread_id);
 		end
 
 		if (m2w_write_back.uses_rw)
 		begin
-			wb_event(m2w_write_back.rw_addr, m2w_write_back.rw_data);
+			// Experimental: Set memory address MSB to thread ID
+			// FIXME: THIS IS A KLUDGE 
+			wb_event({thread_id, m2w_write_back.rw_addr[`ADDR_WIDTH - 2 : 0]}, m2w_write_back.rw_data, thread_id);
 		end
 
 		if (!e2m_hc.stall
 			&& !m2w_hc.flush
 			&& mem_d_cache_output.valid)
 		begin
+			// Experimental: Set memory address MSB to thread ID
+			// FIXME: THIS IS A KLUDGE 
 			if (e2m_d_cache_input.mem_action == READ)
-				ls_event(e2m_d_cache_input.mem_action, e2m_d_cache_input.addr, mem_d_cache_output.data);
+				ls_event(e2m_d_cache_input.mem_action, e2m_d_cache_input.addr, mem_d_cache_output.data, thread_id);
 			else
-				ls_event(e2m_d_cache_input.mem_action, e2m_d_cache_input.addr, e2m_d_cache_input.data);
+				ls_event(e2m_d_cache_input.mem_action, e2m_d_cache_input.addr, e2m_d_cache_input.data, thread_id);
 		end
 	end
 `endif

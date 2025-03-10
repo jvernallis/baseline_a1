@@ -20,6 +20,8 @@ module fetch_unit (
 	input clk,    // Clock
 	input rst_n,  // Synchronous reset active low
 
+	input thread_id,
+
 	// Stall
 	hazard_control_ifc.in i_hc,
 
@@ -36,27 +38,27 @@ module fetch_unit (
 	begin
 		if (!i_hc.stall) begin
 			if(i_load_pc.we) begin
-				o_pc_next.pc = i_load_pc.new_pc;
+				o_pc_next.pc = {thread_id, i_load_pc.new_pc[`ADDR_WIDTH - 2 : 0]};
 			end
 			else
 			begin
 				if(i_branch_prediction.is_branch & i_branch_prediction.prediction)
-					o_pc_next.pc = i_branch_prediction.target;
+					o_pc_next.pc = {thread_id, i_branch_prediction.target[`ADDR_WIDTH - 2 : 0]};
 				else
 					o_pc_next.pc = o_pc_current.pc + `ADDR_WIDTH'd4;
 			end
 		end else begin
-			o_pc_next.pc = o_pc_current.pc;
+			o_pc_next.pc = {thread_id, o_pc_current.pc[`ADDR_WIDTH - 2 : 0]};
 		end
 	end
 
 	always_ff @(posedge clk)
 	begin
 		if(~rst_n)
-			o_pc_current.pc <= '0;	// Start point of programs are always 0x0
+			o_pc_current.pc <= {thread_id, {`ADDR_WIDTH - 1{1'b0}}};	// Start point of programs are always 0x0
 		else
 		begin
-			o_pc_current.pc <= o_pc_next.pc;
+			o_pc_current.pc <= {thread_id, o_pc_next.pc[`ADDR_WIDTH - 2 : 0]};
 		end
 	end
 

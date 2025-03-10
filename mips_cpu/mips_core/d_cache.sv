@@ -47,6 +47,8 @@ module d_cache #(
 	input clk,    // Clock
 	input rst_n,  // Synchronous reset active low
 
+	input thread_id,
+
 	// Request
 	d_cache_input_ifc.in in,
 
@@ -210,6 +212,8 @@ module d_cache #(
 		mem_write_address.AWID = 0;
 		mem_write_address.AWLEN = LINE_SIZE;
 		mem_write_address.AWADDR = {tagbank_rdata[r_select_way], i_index, {BLOCK_OFFSET_WIDTH + 2{1'b0}}};
+		// Experimental: Set memory address MSB to thread ID
+		mem_write_address.AWADDR = {thread_id, mem_write_address.AWADDR[`ADDR_WIDTH - 2 : 0]};
 		mem_write_data.WVALID = state == STATE_FLUSH_DATA;
 		mem_write_data.WID = 0;
 		mem_write_data.WDATA = shift_rdata[0];
@@ -221,6 +225,8 @@ module d_cache #(
 
 	always_comb begin
 		mem_read_address.ARADDR = {r_tag, r_index, {BLOCK_OFFSET_WIDTH + 2{1'b0}}};
+		// Experimental: Set memory address MSB to thread ID
+		mem_read_address.ARADDR = {thread_id, mem_read_address.ARADDR[`ADDR_WIDTH - 2 : 0]};
 		mem_read_address.ARLEN = LINE_SIZE;
 		mem_read_address.ARVALID = state == STATE_REFILL_REQUEST;
 		mem_read_address.ARID = 4'd8;

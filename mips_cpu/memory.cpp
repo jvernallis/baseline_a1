@@ -15,6 +15,8 @@ Memory::Memory(const char *const hex_file, double delay_factor) : delay_factor(d
     }
 
     uint addr = 0;
+    uint thread_id = 1;
+    uint mask = thread_id<< (sizeof(unsigned int) * 8 - 9);
     uint32_t data;
     if (memory_debug >= 3)
         std::cout << std::hex << std::showbase;
@@ -22,7 +24,7 @@ Memory::Memory(const char *const hex_file, double delay_factor) : delay_factor(d
     {
         if (memory_debug >= 3)
             std::cout << "Preload addr=" << addr << " data=" << data << std::endl;
-        m[addr++] = data;
+        m[addr++ ^ mask] = data;
     }
     if (memory_debug >= 3)
         std::cout << std::noshowbase;

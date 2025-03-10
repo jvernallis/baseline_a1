@@ -5,11 +5,10 @@ module stream_buffer#(
     parameter BUFF_DATA_WIDTH = `ADDR_WIDTH,
     parameter MEMID = 0,
     parameter BUFFER_LEN = 8
-
-    
 )(
     input logic clk,
     input rst_n,
+    input thread_id,
     input logic [`ADDR_WIDTH-3:0] current_addr,  //cache access address
     input logic cache_miss,
     input logic miss_valid,
@@ -53,6 +52,7 @@ genvar g;
             ) databank (
                 .clk,
                 .rst_n,
+                .thread_id,
                 .cell_addr(current_addr_reg + buff_tail),
                 .cell_enable((state == STATE_REFILL_REQUEST)&&(buff_tail[$clog2(BUFFER_LEN)-1:0] == g)),
                 .cell_stale((state == STATE_READY) & all_miss),

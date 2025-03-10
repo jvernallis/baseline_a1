@@ -2,3 +2,4 @@ obj_dir/
 *.txt
 simx.*
 *.log
+.vscode/
