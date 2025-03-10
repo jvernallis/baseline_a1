@@ -387,6 +387,7 @@ module mips_core (
 	// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 	// xxxx Debug and statistic collect logic (Not synthesizable)
 	// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+logic thread_id = 1;
 `ifdef SIMULATION
 	always_ff @(posedge clk)
 	begin
@@ -404,13 +405,17 @@ module mips_core (
 
 		if (m2w_write_back.uses_rw)
 		begin
-			wb_event(m2w_write_back.rw_addr, m2w_write_back.rw_data);
+			// Experimental: Set memory address MSB to thread ID
+			// FIXME: THIS IS A KLUDGE 
+			wb_event({thread_id, m2w_write_back.rw_addr[`ADDR_WIDTH - 2 : 0]}, m2w_write_back.rw_data);
 		end
 
 		if (!e2m_hc.stall
 			&& !m2w_hc.flush
 			&& mem_d_cache_output.valid)
 		begin
+			// Experimental: Set memory address MSB to thread ID
+			// FIXME: THIS IS A KLUDGE 
 			if (e2m_d_cache_input.mem_action == READ)
 				ls_event(e2m_d_cache_input.mem_action, e2m_d_cache_input.addr, mem_d_cache_output.data);
 			else

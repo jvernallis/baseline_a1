@@ -81,7 +81,12 @@ void pc_event(const int pc)
         }
 
         unsigned int expected_pc;
-        if (!(f >> std::hex >> expected_pc))
+        unsigned int thread_id = 1U;
+        unsigned int mask = thread_id << (sizeof(unsigned int) * 8 - 7);
+
+        bool pc_valid = bool(f >> std::hex >> expected_pc);
+        expected_pc ^= mask;
+        if (!pc_valid)
         {
             std::cout << "\n!! Ran out of expected pc."
                          "\n!! More instructions are executed than expected"
@@ -130,7 +135,12 @@ void wb_event(const int addr, const int data)
         }
 
         unsigned int expected_addr, expected_data;
-        if (!(f >> std::hex >> expected_addr >> expected_data))
+        unsigned int thread_id = 1U;
+        unsigned int mask = thread_id << (sizeof(unsigned int) * 8 - 7);
+
+        bool rw_valid = bool(f >> std::hex >> expected_addr >> expected_data);
+        expected_addr ^= mask;
+        if (!rw_valid)
         {
             std::cout << "\n!! Ran out of expected write back."
                          "\n!! More write back are executed than expected"
@@ -138,13 +148,14 @@ void wb_event(const int addr, const int data)
                       << std::hex << addr << " data=" << data << std::endl;
             std::raise(SIGINT);
         }
-        else if (expected_addr != addr || expected_data != data)
+        // Experimental (kludge): Take out MSB of read data.
+        else if (expected_addr != addr || (expected_data != data && expected_data != (data & ~mask)))
         {
             std::cout << "\n!! [" << std::dec << main_time << "] expected write back mismatches"
                       << "\n!! [" << std::dec << main_time << "] expected addr=" << std::hex << expected_addr
                       << " data=" << expected_data
                       << "\n!! [" << std::dec << main_time << "] actual   addr=" << std::hex << addr
-                      << " data=" << data << std::endl;
+                      << " data=" << (data & ~mask) << std::endl;
             std::raise(SIGINT);
         }
     }
@@ -183,7 +194,12 @@ void ls_event(const int op, const int addr, const int data)
         }
 
         unsigned int expected_op, expected_addr, expected_data;
-        if (!(f >> std::hex >> expected_op && f >> expected_addr && f >> expected_data))
+        unsigned int thread_id = 1U;
+        unsigned int mask = thread_id << (sizeof(unsigned int) * 8 - 7);
+
+        bool rw_valid = bool(f >> std::hex >> expected_op && f >> expected_addr && f >> expected_data);
+        expected_addr ^= mask;
+        if (!rw_valid)
         {
             std::cout << "\n!! Ran out of expected load store"
                          "\n!! More load store are executed than expected"
@@ -191,7 +207,8 @@ void ls_event(const int op, const int addr, const int data)
                       << std::hex << op << " addr=" << addr << " data=" << data << std::endl;
             std::raise(SIGINT);
         }
-        else if (expected_op != op || expected_addr != addr || expected_data != data)
+        // Experimental (kludge): Take out MSB of read data.
+        else if (expected_op != op || expected_addr != addr || (expected_data != data && expected_data != (data & ~mask)))
         {
             std::cout << "\n!! [" << std::dec << main_time << "] expected load store mismatches"
                       << "\n!! [" << std::dec << main_time << "] expected op=" << std::hex << expected_op

@@ -74,11 +74,14 @@ begin
 end
 
 logic[`ADDR_WIDTH-BLOCK_OFFSET_WIDTH-3:0] mem_addr;
+logic thread_id = 1;
 always_comb
     begin
         mem_addr = (cell_addr);
         mem_read_address.ARADDR = {mem_addr,
             {BLOCK_OFFSET_WIDTH + 2{1'b0}}};
+        // Experimental: Set memory address MSB to thread ID
+		mem_read_address.ARADDR = {thread_id, mem_read_address.ARADDR[`ADDR_WIDTH - 2 : 0]};
         mem_read_address.ARLEN = LINE_SIZE;
         mem_read_address.ARVALID = state == STATE_REFILL_REQUEST;
         mem_read_address.ARID = memid;

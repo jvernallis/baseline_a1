@@ -69,7 +69,7 @@ module ex_stage_glue (
 	d_cache_input_ifc.out o_d_cache_input,
 	d_cache_pass_through_ifc.out o_d_cache_pass_through
 );
-
+	logic thread_id = 1;
 	always_comb
 	begin
 		// o_branch_result.valid = i_alu_output.valid
@@ -80,8 +80,11 @@ module ex_stage_glue (
 
 		o_d_cache_input.valid =      i_alu_pass_through.is_mem_access;
 		o_d_cache_input.mem_action = i_alu_pass_through.mem_action;
-		o_d_cache_input.addr =       i_alu_output.result[`ADDR_WIDTH - 1 : 0];
-		o_d_cache_input.addr_next =  i_alu_output.result[`ADDR_WIDTH - 1 : 0];
+		// Experimental: Set memory address MSB to thread ID
+		// o_d_cache_input.addr =       i_alu_output.result[`ADDR_WIDTH - 1 : 0];
+		// o_d_cache_input.addr_next =  i_alu_output.result[`ADDR_WIDTH - 1 : 0];
+		o_d_cache_input.addr =       {thread_id, i_alu_output.result[`ADDR_WIDTH - 2 : 0]};
+		o_d_cache_input.addr_next =  {thread_id, i_alu_output.result[`ADDR_WIDTH - 2 : 0]};
 		o_d_cache_input.data =       i_alu_pass_through.sw_data;
 
 		o_d_cache_pass_through.is_mem_access = i_alu_pass_through.is_mem_access;
