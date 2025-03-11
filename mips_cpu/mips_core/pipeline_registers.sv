@@ -280,6 +280,8 @@ module pr_m2w (
 			o_wb.uses_rw <= 1'b0;
 			o_wb.rw_addr <= zero;
 			o_wb.rw_data <= '0;
+
+			o_wb.thread_id <= '0; //mt
 		end
 		else
 		begin
@@ -290,12 +292,16 @@ module pr_m2w (
 					o_wb.uses_rw <= 1'b0;
 					o_wb.rw_addr <= zero;
 					o_wb.rw_data <= '0;
+					
+					o_wb.thread_id <= '0; //mt
 				end
 				else
 				begin
 					o_wb.uses_rw <= i_wb.uses_rw;
 					o_wb.rw_addr <= i_wb.rw_addr;
 					o_wb.rw_data <= i_wb.rw_data;
+
+					o_wb.thread_id <= o_wb.thread_id; //mt
 				end
 			end
 		end
