@@ -151,7 +151,11 @@ void wb_event(const int addr, const int data)
 
     write_back_count++;
 }
-
+int ts0{0},ts1{0}; 
+void thread_event(const int aThreadId){
+    if(aThreadId) {ts1++;}
+    else{ts0++;}
+}
 unsigned int load_store_count = 0;
 void ls_event(const int op, const int addr, const int data)
 {
@@ -323,6 +327,8 @@ int main(int argc, char **argv)
               << "\nCPI: " << (float)cycle_count / instruction_count << " IPC: " << (float)instruction_count / cycle_count << std::endl;
 
     std::cout << "\n== Stats ===============\n";
+
+    std::cout << "switch 0 :" << ts0<<"switch 1 :" << ts1 << "\n";
 
     for (const auto &e : stats)
         std::cout << e.first << ": " << e.second << std::endl;

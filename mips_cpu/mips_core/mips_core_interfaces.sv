@@ -12,16 +12,18 @@
 interface load_pc_ifc ();
 	logic we;	// Write Enable
 	logic [`ADDR_WIDTH - 1 : 0] new_pc;
+	logic thread_id;
 
-	modport in  (input we, new_pc);
-	modport out (output we, new_pc);
+	modport in  (input we, new_pc,thread_id);
+	modport out (output we, new_pc,thread_id);
 endinterface
 
 interface pc_ifc ();
 	logic [`ADDR_WIDTH - 1 : 0] pc;
+	logic thread_id;
 
-	modport in  (input pc);
-	modport out (output pc);
+	modport in  (input pc,thread_id);
+	modport out (output pc,thread_id);
 endinterface
 
 interface cache_output_ifc ();
@@ -104,9 +106,10 @@ interface write_back_ifc ();
 	logic uses_rw;	// Write Enable
 	mips_core_pkg::MipsReg rw_addr;
 	logic [`DATA_WIDTH - 1 : 0] rw_data;
+	logic thread_id;
 
-	modport in  (input uses_rw, rw_addr, rw_data);
-	modport out (output uses_rw, rw_addr, rw_data);
+	modport in  (input uses_rw, rw_addr, rw_data,thread_id);
+	modport out (output uses_rw, rw_addr, rw_data,thread_id);
 endinterface
 
 interface hazard_control_ifc ();
