@@ -29,9 +29,10 @@ endinterface
 interface cache_output_ifc ();
 	logic valid;	// Output Valid
 	logic [`DATA_WIDTH - 1 : 0] data;
+	logic thread_id;
 
-	modport in  (input valid, data);
-	modport out (output valid, data);
+	modport in  (input valid, data,thread_id);
+	modport out (output valid, data,thread_id);
 endinterface
 
 // Note: Similar to branch_decoded_ifc
@@ -46,8 +47,10 @@ interface branch_prediction_ifc ();
 
 	mips_core_pkg::BranchOutcome prediction;
 
-	modport in (input valid, target, prediction);
-	modport out (output valid, target, prediction);
+	logic thread_id;
+
+	modport in (input valid, target, prediction,thread_id);
+	modport out (output valid, target, prediction,thread_id);
 endinterface
 
 // Note: Replacement for branch_result_ifc.
@@ -76,8 +79,10 @@ interface alu_pass_through_ifc ();
 	logic uses_rw;
 	mips_core_pkg::MipsReg rw_addr;
 
-	modport in  (input is_mem_access, mem_action, sw_data, uses_rw, rw_addr);
-	modport out (output is_mem_access, mem_action, sw_data, uses_rw, rw_addr);
+	logic thread_id;
+
+	modport in  (input is_mem_access, mem_action, sw_data, uses_rw, rw_addr,thread_id);
+	modport out (output is_mem_access, mem_action, sw_data, uses_rw, rw_addr,thread_id);
 endinterface
 
 // This interface is no longer needed as branch evaluation happens in decode.
@@ -98,8 +103,10 @@ interface d_cache_pass_through_ifc ();
 	logic uses_rw;
 	mips_core_pkg::MipsReg rw_addr;
 
-	modport in  (input is_mem_access, alu_result, uses_rw, rw_addr);
-	modport out (output is_mem_access, alu_result, uses_rw, rw_addr);
+	logic thread_id;
+
+	modport in  (input is_mem_access, alu_result, uses_rw, rw_addr,thread_id);
+	modport out (output is_mem_access, alu_result, uses_rw, rw_addr,thread_id);
 endinterface
 
 interface write_back_ifc ();
@@ -116,7 +123,8 @@ interface hazard_control_ifc ();
 	// Stall signal has higher priority
 	logic flush;	// Flush signal of the previous stage
 	logic stall;	// Stall signal of the next stage
+	logic thread_id;
 
-	modport in  (input flush, stall);
-	modport out (output flush, stall);
+	modport in  (input flush, stall,thread_id);
+	modport out (output flush, stall,thread_id);
 endinterface
