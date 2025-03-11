@@ -97,6 +97,7 @@ module pr_d2e (
 		if(~rst_n)
 		begin
 			o_pc.pc <= '0;
+			o_pc.thread_id <= '0;
 
 			o_alu_input.valid <= '0;
 			o_alu_input.alu_ctl <= ALUCTL_NOP;
@@ -115,6 +116,8 @@ module pr_d2e (
 
 			o_alu_pass_through.uses_rw <= 1'b0;
 			o_alu_pass_through.rw_addr <= zero;
+
+			o_alu_pass_through.thread_id <= '0;
 		end
 		else
 		begin
@@ -123,6 +126,7 @@ module pr_d2e (
 				if (i_hc.flush)
 				begin
 					o_pc.pc <= '0;
+					o_pc.thread_id <= '0;
 
 					o_alu_input.valid <= '0;
 					o_alu_input.alu_ctl <= ALUCTL_NOP;
@@ -141,10 +145,13 @@ module pr_d2e (
 
 					o_alu_pass_through.uses_rw <= 1'b0;
 					o_alu_pass_through.rw_addr <= zero;
+
+					o_alu_pass_through.thread_id <= '0;
 				end
 				else
 				begin
 					o_pc.pc <= i_pc.pc;
+					o_pc.thread_id <= i_pc.thread_id;
 
 					o_alu_input.valid <= i_alu_input.valid;
 					o_alu_input.alu_ctl <= i_alu_input.alu_ctl;
@@ -162,6 +169,8 @@ module pr_d2e (
 
 					o_alu_pass_through.uses_rw <= i_alu_pass_through.uses_rw;
 					o_alu_pass_through.rw_addr <= i_alu_pass_through.rw_addr;
+
+					o_alu_pass_through.thread_id <= i_alu_pass_through.thread_id;
 				end
 			end
 		end
