@@ -34,7 +34,7 @@ interface decoder_output_ifc ();
 	logic uses_rw;
 	mips_core_pkg::MipsReg rw_addr;
 
-	thread_id;
+	logic thread_id;
 
 	modport in  (input valid, alu_ctl, is_branch_jump, is_jump, is_jump_reg,
 		branch_target, is_mem_access, mem_action, uses_rs, rs_addr, uses_rt,
