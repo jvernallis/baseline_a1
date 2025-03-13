@@ -71,6 +71,11 @@ module hazard_controller (
 	//    lw_hazard;		// Load word hazard (input from forward unit)
 	logic dc_miss;			// D cache miss
 
+	logic branch_missed; 			// Branch was not identified as a branch from BTB
+	logic branch_misidentified; 	// Non-branch was identified as a branch from BTB
+	logic target_wrong;				// Branch target was incorrect
+	logic branch_mispredicted;		// Branch decision was incorrect
+
 	// Determine if we have these hazards
 	always_comb
 	begin
@@ -84,6 +89,21 @@ module hazard_controller (
 		dec_overload =
 			((dec_branch_prediction.valid & dec_branch_prediction.prediction) != (dec_branch_resolved.valid & dec_branch_resolved.outcome)) |
 			((dec_branch_resolved.valid & dec_branch_resolved.outcome) & (dec_branch_prediction.target != dec_branch_resolved.target));
+
+		branch_missed = 0;
+		branch_misidentified = 0;
+		target_wrong = 0;
+		branch_mispredicted = 0;
+		if(dec_overload) begin
+			if (!dec_branch_prediction.valid & dec_branch_resolved.valid) 
+				branch_missed = 1;
+			else if (dec_branch_prediction.valid & !dec_branch_resolved.valid) 
+				branch_misidentified = 1;
+			else if (dec_branch_prediction.target != dec_branch_resolved.target)
+				target_wrong = 1;
+			else if (dec_branch_prediction.prediction != dec_branch_resolved.outcome)
+				branch_mispredicted = 1;
+		end
 		dc_miss = ~mem_done;
 	end
 
@@ -218,6 +238,11 @@ module hazard_controller (
 		if (ex_flush) stats_event("ex_flush");
 		if (mem_stall) stats_event("mem_stall");
 		if (mem_flush) stats_event("mem_flush");
+
+		if (branch_missed) stats_event("branch_missed");
+		if (branch_misidentified) stats_event("branch_misidentified");
+		if (target_wrong) stats_event("target_wrong");
+		if (branch_mispredicted) stats_event("branch_mispredicted");
 	end
 `endif
 

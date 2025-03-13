@@ -14,6 +14,9 @@ module branch_controller (
 	input clk,    // Clock
 	input rst_n,  // Synchronous reset active low
 
+	// Stall
+	hazard_control_ifc.in i_hc,
+
 	// Request
 	pc_ifc.in if_pc, //IF's next_pc
 	branch_prediction_ifc.out if_branch_prediction,
@@ -22,17 +25,19 @@ module branch_controller (
 	pc_ifc.in dec_pc,
 	branch_resolution_ifc.in dec_branch_resolved
 );
-	logic branch_outcome; // PC of branch destination
+	logic [`ADDR_WIDTH - 1 : 0] branch_outcome; // PC of branch destination
 	
 	branch_target_buffer BTB (
 		.clk, .rst_n,
 
-		.we_btb			(dec_branch_resolved.valid), //From d2e register
-		.w_target		(dec_branch_resolved.target), //From d2e register
-		.hit_out		(if_branch_prediction.valid),
+		.we_btb			(dec_branch_resolved.valid), 
+		.w_target		(dec_branch_resolved.target),
 		.r_target 		(if_branch_prediction.target),
+		.hit_out		(if_branch_prediction.valid),
+		
 		.i_req_pc		(if_pc.pc),
-		.i_pc_next 		(branch_outcome) //Will be computed
+		.i_pc_next 		(branch_outcome), //Will be computed
+		.i_fb_pc		(dec_pc.pc)
 	);
 
 	// Predictor interface changes: prediction will be binary logic; target not provided.
@@ -53,11 +58,17 @@ module branch_controller (
 
 	always_comb
 	begin
-		
-		branch_outcome = 
-			(if_branch_prediction.valid & (if_branch_prediction.prediction == TAKEN)) 
-			? if_branch_prediction.target 
-			: dec_pc.pc + `ADDR_WIDTH'd8;
+		if(!i_hc.stall)
+		begin
+			branch_outcome = 
+				(if_branch_prediction.valid & (if_branch_prediction.prediction == TAKEN)) 
+				? if_branch_prediction.target 
+				: if_pc.pc + `ADDR_WIDTH'd4;
+		end
+		else
+		begin
+			branch_outcome = if_pc.pc + `ADDR_WIDTH'd4;
+		end
 	end
 endmodule
 
@@ -80,7 +91,7 @@ module branch_predictor_always_not_taken (
 
 	always_comb
 	begin
-		o_req_prediction = NOT_TAKEN;
+		o_req_prediction = TAKEN;
 	end
 
 endmodule
@@ -238,58 +249,69 @@ module branch_target_buffer #(
     input  we_btb,
 	
     input  logic [`ADDR_WIDTH - 1 : 0] w_target,
-    output logic hit_out,
     output logic [`ADDR_WIDTH - 1 : 0] r_target,
+	output logic hit_out,
 
     // Request
     input  logic [`ADDR_WIDTH - 1 : 0] i_req_pc,
-	input  logic [`ADDR_WIDTH - 1 : 0] i_pc_next
+	input  logic [`ADDR_WIDTH - 1 : 0] i_pc_next,
+	input  logic [`ADDR_WIDTH - 1 : 0] i_fb_pc,
 );
-    localparam TAG_WIDTH = `ADDR_WIDTH - INDEX_WIDTH;
+    localparam TAG_WIDTH = `ADDR_WIDTH - INDEX_WIDTH - 2;
     localparam DEPTH = 1 << INDEX_WIDTH;
     
     logic [TAG_WIDTH - 1 : 0] i_tag;
 	logic [INDEX_WIDTH - 1 : 0] i_index;
 	logic [INDEX_WIDTH - 1 : 0] i_index_next;
 
+	logic [TAG_WIDTH - 1 : 0] w_tag;
+	logic [INDEX_WIDTH - 1 : 0] w_index;
+
+	logic [`ADDR_WIDTH - 1 : 0] last_i_pc;
+	logic [`ADDR_WIDTH - 1 : 0] last_pc_next;
+
     //signals for least recently used associative logic
-    logic r_select_way;
-    logic w1_select_way;
-	logic w2_select_way;
+	logic r_select_way;
+	logic w_select_way;
+	
+	// btb hit
+	logic hit;
+	logic w_hit;
+	
 	logic [DEPTH - 1 : 0] lru_rp;
 
     assign {i_tag, i_index} = i_req_pc[`ADDR_WIDTH - 1 : 2];
-	assign i_index_next = i_pc_next[INDEX_WIDTH-1:0];
-    // targetbank signals
-	logic targetbank_we[ASSOCIATIVITY];
-	logic [`ADDR_WIDTH - 1 : 0] targetbank_wdata;
-	logic [INDEX_WIDTH - 1 : 0] targetbank_waddr;
-	logic [INDEX_WIDTH - 1 : 0] targetbank_raddr;
-    logic [`ADDR_WIDTH - 1 : 0] targetbank_rdata[ASSOCIATIVITY];
+	assign {w_tag, w_index} = i_fb_pc[`ADDR_WIDTH - 1 : 2];
+	assign i_index_next = i_pc_next[INDEX_WIDTH - 1 + 2 : 2];
+    // databank signals
+	logic databank_we[ASSOCIATIVITY];
+	logic [`ADDR_WIDTH - 1 : 0] databank_wdata;
+	logic [INDEX_WIDTH - 1 : 0] databank_waddr;
+	logic [INDEX_WIDTH - 1 : 0] databank_raddr;
+    logic [`ADDR_WIDTH - 1 : 0] databank_rdata[ASSOCIATIVITY];
 
-    //generate target banks
+    //generate data banks
     genvar g;
 	generate
-	
 		for (g=0; g< ASSOCIATIVITY; g++)
-		begin : targetbanks
+		begin : databanks
 			cache_bank #(
 				.DATA_WIDTH (`ADDR_WIDTH),
 				.ADDR_WIDTH (INDEX_WIDTH)
-			) targetbank (
+			) databank (
 				.clk,
-				.i_we (targetbank_we[g]),
-				.i_wdata(targetbank_wdata),
-				.i_waddr(targetbank_waddr),
-				.i_raddr(targetbank_raddr),
+				.i_we (databank_we[g]),
+				.i_wdata(databank_wdata),
+				.i_waddr(databank_waddr),
+				.i_raddr(databank_raddr),
 
-				.o_rdata(targetbank_rdata[g])
+				.o_rdata(databank_rdata[g])
 			);
 		end
 
 	endgenerate
 
-   // tagbank signals 
+    // tagbank signals 
     logic tagbank_we[ASSOCIATIVITY];
 	logic [TAG_WIDTH - 1 : 0] tagbank_wdata;
 	logic [INDEX_WIDTH - 1 : 0] tagbank_waddr;
@@ -299,7 +321,7 @@ module branch_target_buffer #(
 	//generate tag banks
 	genvar w;
 	generate
-		for (w=0; w< ASSOCIATIVITY; w++)
+		for (w=0; w < ASSOCIATIVITY; w++)
 		begin: tagbanks
 			cache_bank #(
 				.DATA_WIDTH (TAG_WIDTH),
@@ -319,16 +341,17 @@ module branch_target_buffer #(
 
 	// Valid bits
 	logic [DEPTH - 1 : 0] valid_bits[ASSOCIATIVITY];
-   // btb hit
-	logic hit;
-
+   
     always_comb
     begin
 		//change hit condition when more ways are added
 		hit = ( ((i_tag == tagbank_rdata[0]) & valid_bits[0][i_index])
-				  |	((i_tag == tagbank_rdata[1]) & valid_bits[1][i_index]));
-       //change if statment when more ways are added
-      if (hit)
+			  | ((i_tag == tagbank_rdata[1]) & valid_bits[1][i_index]));
+
+		hit &= (i_req_pc == last_pc_next);
+       
+	   //change if statment when more ways are added
+    	if (hit)
 		begin
 			if (i_tag == tagbank_rdata[0])
 			begin
@@ -339,48 +362,62 @@ module branch_target_buffer #(
 				r_select_way = 'b1;
 			end
 		end
+		// else
+		// begin
+		// 	select_way = lru_rp[i_index];
+		// end
+
+		w_hit = ( ((w_tag == tagbank_rdata[0]) & valid_bits[0][w_index])
+				| ((w_tag == tagbank_rdata[1]) & valid_bits[1][w_index]));
+		w_hit &= (last_i_pc == i_req_pc);
+		if (w_hit)
+		begin
+			if (w_tag == tagbank_rdata[0])
+			begin
+				w_select_way = 'b0;
+			end
+			else
+			begin
+				w_select_way = 'b1;
+			end
+		end
 		else
 		begin
-			r_select_way = lru_rp[i_index];
+			w_select_way = lru_rp[w_index];
 		end
     end
 
     //tagbank connections
-    logic [INDEX_WIDTH - 1 : 0]w1_index;
-    logic [TAG_WIDTH - 1 : 0]w1_tag_data;
-	logic [INDEX_WIDTH - 1 : 0]w2_index;
-    logic [TAG_WIDTH - 1 : 0]w2_tag_data;
     always_comb
 	begin
-        tagbank_wdata = w2_tag_data;
-        tagbank_waddr = w2_index;
-		tagbank_we[0] = ~w2_select_way ? we_btb :1'b0;
-        tagbank_we[1] = w2_select_way ? we_btb :1'b0;
-		  
+        tagbank_wdata = w_tag;
+        tagbank_waddr = w_index;
+		tagbank_we[w_select_way] = we_btb;
+		tagbank_we[~w_select_way] = '0;
 		tagbank_raddr = i_index_next;
 	end
 
-    //targetbank connections
-    logic [ADDR_WIDTH - 1 : 0]w_target_data;
+    //databank connections
     always_comb
 	begin
-        targetbank_wdata = w_target_data;
-        targetbank_waddr = w2_index;
-		targetbank_we[0] = ~w2_select_way ? we_btb :1'b0;
-        targetbank_we[1] = w2_select_way ? we_btb :1'b0;
-		  
-		targetbank_raddr = i_index_next;
+        databank_wdata = w_target;
+        databank_waddr = w_index;
+		databank_we[w_select_way] = we_btb;
+        databank_we[~w_select_way] = '0;
+		databank_raddr = i_index_next;
 	end
+
     //read outputs
     always_comb
 	begin
 		hit_out = hit;
-		r_target = targetbank_rdata[r_select_way];
+		r_target = databank_rdata[r_select_way];
 	end
-	
 	
     always_ff @(posedge clk)
 	begin
+		last_pc_next <= i_pc_next;
+		last_i_pc <= i_req_pc;
 		if(~rst_n)
 		begin
 			for (int i=0; i<DEPTH;i++)
@@ -390,23 +427,71 @@ module branch_target_buffer #(
 		end
 		else
 		begin
-            lru_rp[i_index] <= ~r_select_way;
-            if(~hit)
-            begin
-				//data for write locked in for miss(will write 2 cycles after miss and branch confirm)
-                w1_tag_data <= i_tag;
-                 
-                w1_index <= i_index;
-                w1_select_way <= r_select_way;
-            end
-				//set valid bit on a write(will be valid cycle after write)
-				valid_bits[w2_index][w2_select_way] <=we_btb;
-				//data for write (will write cycle after miss and branch confirm)
-				w2_tag_data <= w1_tag_data;  
-				w2_index <= w1_index;
-				w2_select_way <= w1_select_way;
-				//target from decode sent to write
-				w_target_data <= w_target;
+			if(hit)
+				lru_rp[i_index] <= ~r_select_way;
+            // if(~hit)
+            // begin
+			// 	//data for write locked in for miss(will write 2 cycles after miss and branch confirm)
+            //     w1_tag_data <= i_tag;
+            //     w1_index <= i_index;
+            //     w1_select_way <= r_select_way;
+            // end
+			// 	//set valid bit on a write(will be valid cycle after write)
+			// 	valid_bits[w2_index][w2_select_way] <= we_btb;
+			// 	//data for write (will write cycle after miss and branch confirm)
+			// 	w2_tag_data <= w1_tag_data;  
+			// 	w2_index <= w1_index;
+			// 	w2_select_way <= w1_select_way;
+			// 	//target from decode sent to write
+			// 	w_target_data <= w_target;
+
+
+		if(we_btb)
+		begin
+			valid_bits[w_select_way][w_index] <= '1;
+			// if(w_hit)
+			// 	$display("Write hit with w_tag = %h and w_index = %h", w_tag, w_index);
+			// $display("Write enable with input pc %h, target %h", i_fb_pc, w_target);
+
+			if(i_fb_pc == 12'hACC)
+			begin
+				// $display("Writing to the cache for branch ACC, target is %h", w_target);
+				// $display("Writing index %h and tag %h", tagbank_waddr, tagbank_wdata);
+			end
+
+			// if(i_fb_pc == 12'hAC8)
+			// 	$display("Error: writing to cache for branch AC8. This shouldn't ever happen. Target is %h", w_target);
+		end
+		if(hit)
+		begin
+			//$display("Cache read hit for PC %h, the target was %h", i_req_pc, r_target);
+			if(i_req_pc == 12'hACC)
+				// $display("Hit the cache for branch ACC, target is %h", r_target);
+
+			if(i_req_pc == 12'hAC8)
+			begin
+				$display("Error: hit the cache for branch AC8. This shouldn't ever happen. Target is %h", r_target);
+				$display("When this happened, index was %h and tag was %h. Last pc next was %h, last pc was %h", i_index, i_tag, last_pc_next, last_i_pc);
+				$display("Sanity check: PC was %h, next PC is %h, current index is %h, next index is %h", i_req_pc, i_pc_next, i_index, i_index_next);
+			end
+		end
+
+		if(i_req_pc == 12'hACC)
+		begin
+			//$display("At PC %h, the hit status is %d. Tag was %h and index was %h for a last PC of %h and a last next PC of %h", i_req_pc, hit, i_index, i_tag, last_i_pc, last_pc_next);
+		end
+
+		if(i_pc_next == 12'hACC)
+		begin
+			// if(hit)
+			// begin
+			// 	$display("Error: We should not be here, hit is 1.");
+			// end
+			// $display("At ACC's read in data/tag banks. The read index is %h", i_index_next);
+			// $display("Databanks are currently %h and %h", databank_rdata[0], databank_rdata[1]);
+			// $display("Tagbanks are currently %h and %h", tagbank_rdata[0], tagbank_rdata[1]);
+			// $display("i_req_pc is %h", i_req_pc);
+		end
       end
 	end
 endmodule

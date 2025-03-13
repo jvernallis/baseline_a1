@@ -146,12 +146,11 @@ module mips_core (
 	branch_controller BRANCH_CONTROLLER(
 		.clk, .rst_n,
 
+		.i_hc         			(i2i_hc),
 		.if_pc		  			(if_pc_next),
 		.if_branch_prediction	(if_branch_prediction),
 		
-		//FIXME: resolution goes here.
-		//Pretty sure we can resolve branch in decode and put it back in here...
-		.dec_pc					(d2e_pc),
+		.dec_pc					(i2d_pc),
 		.dec_branch_resolved	(dec_branch_resolved)
 	);
 	// If you want to change the line size and total size of instruction cache,
@@ -217,7 +216,6 @@ module mips_core (
 		.i_decoded          (dec_decoder_output),
 		.i_reg_data         (dec_forward_unit_output),
 
-		// .branch_decoded     (dec_branch_decoded),
 		.branch_resolved	(dec_branch_resolved),
 
 		.o_alu_input        (dec_alu_input),
