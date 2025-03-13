@@ -34,12 +34,14 @@ interface decoder_output_ifc ();
 	logic uses_rw;
 	mips_core_pkg::MipsReg rw_addr;
 
+	thread_id;
+
 	modport in  (input valid, alu_ctl, is_branch_jump, is_jump, is_jump_reg,
 		branch_target, is_mem_access, mem_action, uses_rs, rs_addr, uses_rt,
-		rt_addr, uses_immediate, immediate, uses_rw, rw_addr);
+		rt_addr, uses_immediate, immediate, uses_rw, rw_addr,thread_id);
 	modport out (output valid, alu_ctl, is_branch_jump, is_jump, is_jump_reg,
 		branch_target, is_mem_access, mem_action, uses_rs, rs_addr, uses_rt,
-		rt_addr, uses_immediate, immediate, uses_rw, rw_addr);
+		rt_addr, uses_immediate, immediate, uses_rw, rw_addr,thread_id);
 endinterface
 
 module decoder (
@@ -48,6 +50,8 @@ module decoder (
 
 	decoder_output_ifc.out out
 );
+
+	out.thread_id = i_pc.thread_id;
 
 	task rs;
 		begin

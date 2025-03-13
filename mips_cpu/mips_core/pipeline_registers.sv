@@ -34,11 +34,14 @@ module pr_i2d (
 		if(~rst_n)
 		begin
 			o_pc.pc <= '0;
+			o_pc.thread_id <= '0; //mt
 			o_inst.valid <= 1'b0;
 			o_inst.data <= '0;
+			o_inst.thread_id <= '0; //mt
 			o_pred.valid <= 1'b0;
 			o_pred.target <= '0;
 			o_pred.prediction <= NOT_TAKEN;
+			o_pred.thread_id <= '0; //mt
 		end
 		else
 		begin
@@ -47,20 +50,26 @@ module pr_i2d (
 				if (i_hc.flush)
 				begin
 					o_pc.pc <= '0;
+					o_pc.thread_id <= '0; //mt
 					o_inst.valid <= 1'b0;
 					o_inst.data <= '0;
+					o_inst.thread_id <= '0; //mt
 					o_pred.valid <= 1'b0;
 					o_pred.target <= '0;
 					o_pred.prediction <= NOT_TAKEN;
+					o_pred.thread_id <= '0; //mt
 				end
 				else
 				begin
 					o_pc.pc <= i_pc.pc;
+					o_pc.thread_id <= o_pc.thread_id; //mt
 					o_inst.valid <= i_inst.valid;
 					o_inst.data <= i_inst.data;
+					o_inst.thread_id <= i_inst.thread_id; //mt
 					o_pred.valid <= i_pred.valid;
 					o_pred.target <= i_pred.target;
 					o_pred.prediction <= i_pred.prediction;
+					o_pred.thread_id <= i_pred.thread_id; //mt
 				end
 			end
 		end
@@ -88,6 +97,7 @@ module pr_d2e (
 		if(~rst_n)
 		begin
 			o_pc.pc <= '0;
+			o_pc.thread_id <= '0;
 
 			o_alu_input.valid <= '0;
 			o_alu_input.alu_ctl <= ALUCTL_NOP;
@@ -106,6 +116,8 @@ module pr_d2e (
 
 			o_alu_pass_through.uses_rw <= 1'b0;
 			o_alu_pass_through.rw_addr <= zero;
+
+			o_alu_pass_through.thread_id <= '0;
 		end
 		else
 		begin
@@ -114,6 +126,7 @@ module pr_d2e (
 				if (i_hc.flush)
 				begin
 					o_pc.pc <= '0;
+					o_pc.thread_id <= '0; //mt
 
 					o_alu_input.valid <= '0;
 					o_alu_input.alu_ctl <= ALUCTL_NOP;
@@ -132,10 +145,13 @@ module pr_d2e (
 
 					o_alu_pass_through.uses_rw <= 1'b0;
 					o_alu_pass_through.rw_addr <= zero;
+
+					o_alu_pass_through.thread_id <= '0; //mt
 				end
 				else
 				begin
 					o_pc.pc <= i_pc.pc;
+					o_pc.thread_id <= i_pc.thread_id; //mt
 
 					o_alu_input.valid <= i_alu_input.valid;
 					o_alu_input.alu_ctl <= i_alu_input.alu_ctl;
@@ -153,6 +169,8 @@ module pr_d2e (
 
 					o_alu_pass_through.uses_rw <= i_alu_pass_through.uses_rw;
 					o_alu_pass_through.rw_addr <= i_alu_pass_through.rw_addr;
+
+					o_alu_pass_through.thread_id <= i_alu_pass_through.thread_id; //mt
 				end
 			end
 		end
@@ -187,6 +205,7 @@ module pr_e2m (
 		if(~rst_n)
 		begin
 			o_pc.pc <= '0;
+			o_pc.thread_id <= '0; //mt
 
 			o_d_cache_input.valid <= 1'b0;
 			o_d_cache_input.mem_action <= READ;
@@ -197,6 +216,8 @@ module pr_e2m (
 			o_d_cache_pass_through.alu_result <= '0;
 			o_d_cache_pass_through.uses_rw <= 1'b0;
 			o_d_cache_pass_through.rw_addr <= zero;
+
+			o_d_cache_pass_through.thread_id <= '0; //mt
 		end
 		else
 		begin
@@ -205,6 +226,7 @@ module pr_e2m (
 				if (i_hc.flush)
 				begin
 					o_pc.pc <= '0;
+					o_pc.thread_id <= '0; //mt
 
 					o_d_cache_input.valid <= 1'b0;
 					o_d_cache_input.mem_action <= READ;
@@ -215,10 +237,13 @@ module pr_e2m (
 					o_d_cache_pass_through.alu_result <= '0;
 					o_d_cache_pass_through.uses_rw <= 1'b0;
 					o_d_cache_pass_through.rw_addr <= zero;
+
+					o_d_cache_pass_through.thread_id <= '0; //mt
 				end
 				else
 				begin
 					o_pc.pc <= i_pc.pc;
+					o_pc.thread_id <= i_pc.thread_id; //mt
 
 					o_d_cache_input.valid <= i_d_cache_input.valid;
 					o_d_cache_input.mem_action <= i_d_cache_input.mem_action;
@@ -229,6 +254,8 @@ module pr_e2m (
 					o_d_cache_pass_through.alu_result <= i_d_cache_pass_through.alu_result;
 					o_d_cache_pass_through.uses_rw <= i_d_cache_pass_through.uses_rw;
 					o_d_cache_pass_through.rw_addr <= i_d_cache_pass_through.rw_addr;
+
+					o_d_cache_pass_through.thread_id <= i_d_cache_pass_through.thread_id;
 				end
 			end
 		end
@@ -253,6 +280,8 @@ module pr_m2w (
 			o_wb.uses_rw <= 1'b0;
 			o_wb.rw_addr <= zero;
 			o_wb.rw_data <= '0;
+
+			o_wb.thread_id <= '0; //mt
 		end
 		else
 		begin
@@ -263,12 +292,16 @@ module pr_m2w (
 					o_wb.uses_rw <= 1'b0;
 					o_wb.rw_addr <= zero;
 					o_wb.rw_data <= '0;
+					
+					o_wb.thread_id <= '0; //mt
 				end
 				else
 				begin
 					o_wb.uses_rw <= i_wb.uses_rw;
 					o_wb.rw_addr <= i_wb.rw_addr;
 					o_wb.rw_data <= i_wb.rw_data;
+
+					o_wb.thread_id <= o_wb.thread_id; //mt
 				end
 			end
 		end
