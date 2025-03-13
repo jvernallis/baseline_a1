@@ -51,7 +51,7 @@ module decoder (
 	decoder_output_ifc.out out
 );
 
-	out.thread_id = i_pc.thread_id;
+	assign out.thread_id = i_pc.thread_id;
 
 	task rs;
 		begin
