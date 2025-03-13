@@ -62,7 +62,7 @@ module pr_i2d (
 				else
 				begin
 					o_pc.pc <= i_pc.pc;
-					o_pc.thread_id <= o_pc.thread_id; //mt
+					o_pc.thread_id <= i_pc.thread_id; //mt
 					o_inst.valid <= i_inst.valid;
 					o_inst.data <= i_inst.data;
 					o_inst.thread_id <= i_inst.thread_id; //mt
@@ -301,7 +301,7 @@ module pr_m2w (
 					o_wb.rw_addr <= i_wb.rw_addr;
 					o_wb.rw_data <= i_wb.rw_data;
 
-					o_wb.thread_id <= o_wb.thread_id; //mt
+					o_wb.thread_id <= i_wb.thread_id; //mt
 				end
 			end
 		end
