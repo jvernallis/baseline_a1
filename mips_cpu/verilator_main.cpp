@@ -207,6 +207,8 @@ void ls_event(const int op, const int addr, const int data)
     load_store_count++;
 }
 
+void thread_event(int aThread){}
+
 int main(int argc, char **argv)
 {
     std::signal(SIGINT, signal_handler);
