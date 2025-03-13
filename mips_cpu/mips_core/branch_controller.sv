@@ -14,6 +14,9 @@ module branch_controller (
 	input clk,    // Clock
 	input rst_n,  // Synchronous reset active low
 
+	// Stall
+	hazard_control_ifc.in i_hc,
+
 	// Request
 	pc_ifc.in if_pc, //IF's next_pc
 	branch_prediction_ifc.out if_branch_prediction,
@@ -22,42 +25,49 @@ module branch_controller (
 	pc_ifc.in dec_pc,
 	branch_resolution_ifc.in dec_branch_resolved
 );
-	logic branch_outcome; // PC of branch destination
+	logic [`ADDR_WIDTH - 1 : 0] branch_outcome; // PC of branch destination
 	
 	branch_target_buffer BTB (
 		.clk, .rst_n,
 
-		.we_btb			(dec_branch_resolved.valid), //From d2e register
-		.w_target		(dec_branch_resolved.target), //From d2e register
-		.hit_out		(if_branch_prediction.valid),
+		.i_hc,
+
+		.we_btb			(dec_branch_resolved.is_branch), 
+		.w_target		(dec_branch_resolved.target),
 		.r_target 		(if_branch_prediction.target),
+		.hit_out		(if_branch_prediction.is_branch),
+		
 		.i_req_pc		(if_pc.pc),
-		.i_pc_next 		(branch_outcome) //Will be computed
+		.i_pc_next 		(branch_outcome), //Will be computed
+		.i_fb_pc		(dec_pc.pc)
 	);
 
 	// Predictor interface changes: prediction will be binary logic; target not provided.
 	// Change the following line to switch predictor
-	branch_predictor_always_not_taken PREDICTOR (
+	branch_predictor_gshare PREDICTOR (
 		.clk, .rst_n,
 
-		// .i_req_valid     (request_prediction),
 		.i_req_pc        (if_pc.pc),
-		// .i_req_target    (dec_branch_decoded.target),
 		.o_req_prediction(if_branch_prediction.prediction),
 
-		.i_fb_valid      (dec_branch_resolved.valid),
+		.i_fb_valid      (dec_branch_resolved.is_branch),
 		.i_fb_pc         (dec_pc.pc),
 		.i_fb_prediction (dec_branch_resolved.prediction),
 		.i_fb_outcome    (dec_branch_resolved.outcome)
 	);
-
 	always_comb
 	begin
-		
-		branch_outcome = 
-			(if_branch_prediction.valid & (if_branch_prediction.prediction == TAKEN)) 
-			? if_branch_prediction.target 
-			: dec_pc.pc + `ADDR_WIDTH'd8;
+		if(!i_hc.stall)
+		begin
+			branch_outcome = 
+				(if_branch_prediction.is_branch & (if_branch_prediction.prediction == TAKEN)) 
+				? if_branch_prediction.target 
+				: if_pc.pc + `ADDR_WIDTH'd4;
+		end
+		else
+		begin
+			branch_outcome = if_pc.pc + `ADDR_WIDTH'd4;
+		end
 	end
 endmodule
 
@@ -159,18 +169,16 @@ module branch_predictor_gshare (
 	input mips_core_pkg::BranchOutcome i_fb_prediction,
 	input mips_core_pkg::BranchOutcome i_fb_outcome
 );
-localparam COUNTER_WIDTH = 2;
-localparam INDEX_WIDTH = 16;
+	localparam COUNTER_WIDTH = 2;
+	localparam INDEX_WIDTH = 16;
 
-logic [INDEX_WIDTH-1:0] index_read; 
-logic [INDEX_WIDTH-1:0] index_write; 
-logic [INDEX_WIDTH-1:0] ghr;
-// logic [INDEX_WIDTH-1:0] old_ghr;
-logic [COUNTER_WIDTH-1:0] current_counter;
+	logic [INDEX_WIDTH-1:0] index_read; 
+	logic [INDEX_WIDTH-1:0] index_read_pass_through; //Write 2 cycles after read 
+	logic [INDEX_WIDTH-1:0] index_write; 
+	logic [INDEX_WIDTH-1:0] ghr;
+	logic [COUNTER_WIDTH-1:0] current_counter;
 
-// logic [1:0] counter;
-
-logic [COUNTER_WIDTH-1:0] counter_regs[2**INDEX_WIDTH];
+	logic [COUNTER_WIDTH-1:0] counter_regs[2**INDEX_WIDTH];
 
 	task incr;
 		begin
@@ -195,35 +203,30 @@ logic [COUNTER_WIDTH-1:0] counter_regs[2**INDEX_WIDTH];
 			begin
 			counter_regs[i] <= 2'b10; //Default: weakly taken
 			end
-		end
-		else
+		end else
 		begin
-		index_write <= index_read;
+			index_read_pass_through <= index_read;
+			index_write <= index_read_pass_through;
 
-		if (i_fb_valid)
-		begin
-
+			if (i_fb_valid)
+			begin
+				//$display("Current index read is %h, index read pass through is %h, index write is %h", index_read, index_read_pass_through, index_write);
 				case (i_fb_outcome)
 					NOT_TAKEN: decr();
 					TAKEN:     incr();
 				endcase
 
-				for (int i=1; i<INDEX_WIDTH; i++)
-				begin
-					ghr[i] <= ghr[i-1];
-				end
-			ghr[0] <= i_fb_outcome;
-		end
-		else begin
-			ghr <= ghr;
-		end
+				ghr <= {ghr[INDEX_WIDTH:1], i_fb_outcome};
+			end
+			else begin
+				ghr <= ghr;
+			end
 		end
 	end
 
 	always_comb
 	begin
-
-		index_read = i_req_pc[INDEX_WIDTH-1:0] ^ ghr;
+		index_read = i_req_pc ^ ghr[INDEX_WIDTH-1:0];
 		o_req_prediction = counter_regs[index_read][1] ? TAKEN : NOT_TAKEN;
 	end
 endmodule
@@ -236,60 +239,74 @@ module branch_target_buffer #(
     input  clk,    // Clock
     input  rst_n,  // Synchronous reset active low
     input  we_btb,
+
+	// Stall
+	hazard_control_ifc.in i_hc,
 	
     input  logic [`ADDR_WIDTH - 1 : 0] w_target,
-    output logic hit_out,
     output logic [`ADDR_WIDTH - 1 : 0] r_target,
+	output logic hit_out,
 
     // Request
     input  logic [`ADDR_WIDTH - 1 : 0] i_req_pc,
-	input  logic [`ADDR_WIDTH - 1 : 0] i_pc_next
+	input  logic [`ADDR_WIDTH - 1 : 0] i_pc_next,
+	input  logic [`ADDR_WIDTH - 1 : 0] i_fb_pc,
 );
-    localparam TAG_WIDTH = `ADDR_WIDTH - INDEX_WIDTH;
+    localparam TAG_WIDTH = `ADDR_WIDTH - INDEX_WIDTH - 2;
     localparam DEPTH = 1 << INDEX_WIDTH;
     
     logic [TAG_WIDTH - 1 : 0] i_tag;
 	logic [INDEX_WIDTH - 1 : 0] i_index;
 	logic [INDEX_WIDTH - 1 : 0] i_index_next;
 
+	logic [TAG_WIDTH - 1 : 0] w_tag;
+	logic [INDEX_WIDTH - 1 : 0] w_index;
+
+	logic [`ADDR_WIDTH - 1 : 0] last_i_pc;
+	logic [`ADDR_WIDTH - 1 : 0] last_pc_next;
+
     //signals for least recently used associative logic
-    logic r_select_way;
-    logic w1_select_way;
-	logic w2_select_way;
+	logic r_select_way;
+	logic w_select_way;
+	
+	// btb hit
+	logic hit;
+	logic w_hit;
+	
 	logic [DEPTH - 1 : 0] lru_rp;
 
     assign {i_tag, i_index} = i_req_pc[`ADDR_WIDTH - 1 : 2];
-	assign i_index_next = i_pc_next[INDEX_WIDTH-1:0];
-    // targetbank signals
-	logic targetbank_we[ASSOCIATIVITY];
-	logic [`ADDR_WIDTH - 1 : 0] targetbank_wdata;
-	logic [INDEX_WIDTH - 1 : 0] targetbank_waddr;
-	logic [INDEX_WIDTH - 1 : 0] targetbank_raddr;
-    logic [`ADDR_WIDTH - 1 : 0] targetbank_rdata[ASSOCIATIVITY];
+	assign {w_tag, w_index} = i_fb_pc[`ADDR_WIDTH - 1 : 2];
+	assign i_index_next = i_pc_next[INDEX_WIDTH - 1 + 2 : 2];
+    // databank signals
+	logic databank_we[ASSOCIATIVITY];
+	logic [`ADDR_WIDTH - 1 : 0] databank_wdata;
+	logic [INDEX_WIDTH - 1 : 0] databank_waddr;
+	logic [INDEX_WIDTH - 1 : 0] databank_raddr;
+    logic [`ADDR_WIDTH - 1 : 0] databank_rdata[ASSOCIATIVITY];
 
-    //generate target banks
+    //generate data banks
     genvar g;
 	generate
-	
 		for (g=0; g< ASSOCIATIVITY; g++)
-		begin : targetbanks
+		begin : databanks
 			cache_bank #(
 				.DATA_WIDTH (`ADDR_WIDTH),
 				.ADDR_WIDTH (INDEX_WIDTH)
-			) targetbank (
+			) databank (
 				.clk,
-				.i_we (targetbank_we[g]),
-				.i_wdata(targetbank_wdata),
-				.i_waddr(targetbank_waddr),
-				.i_raddr(targetbank_raddr),
+				.i_we (databank_we[g]),
+				.i_wdata(databank_wdata),
+				.i_waddr(databank_waddr),
+				.i_raddr(databank_raddr),
 
-				.o_rdata(targetbank_rdata[g])
+				.o_rdata(databank_rdata[g])
 			);
 		end
 
 	endgenerate
 
-   // tagbank signals 
+    // tagbank signals 
     logic tagbank_we[ASSOCIATIVITY];
 	logic [TAG_WIDTH - 1 : 0] tagbank_wdata;
 	logic [INDEX_WIDTH - 1 : 0] tagbank_waddr;
@@ -299,7 +316,7 @@ module branch_target_buffer #(
 	//generate tag banks
 	genvar w;
 	generate
-		for (w=0; w< ASSOCIATIVITY; w++)
+		for (w=0; w < ASSOCIATIVITY; w++)
 		begin: tagbanks
 			cache_bank #(
 				.DATA_WIDTH (TAG_WIDTH),
@@ -319,16 +336,15 @@ module branch_target_buffer #(
 
 	// Valid bits
 	logic [DEPTH - 1 : 0] valid_bits[ASSOCIATIVITY];
-   // btb hit
-	logic hit;
-
+   
     always_comb
     begin
 		//change hit condition when more ways are added
 		hit = ( ((i_tag == tagbank_rdata[0]) & valid_bits[0][i_index])
-				  |	((i_tag == tagbank_rdata[1]) & valid_bits[1][i_index]));
-       //change if statment when more ways are added
-      if (hit)
+			  | ((i_tag == tagbank_rdata[1]) & valid_bits[1][i_index]));
+       
+	   //change if statment when more ways are added
+    	if (hit)
 		begin
 			if (i_tag == tagbank_rdata[0])
 			begin
@@ -339,48 +355,57 @@ module branch_target_buffer #(
 				r_select_way = 'b1;
 			end
 		end
+
+		w_hit = ( ((w_tag == tagbank_rdata[0]) & valid_bits[0][w_index])
+				| ((w_tag == tagbank_rdata[1]) & valid_bits[1][w_index]));
+		if (w_hit)
+		begin
+			if (w_tag == tagbank_rdata[0])
+			begin
+				w_select_way = 'b0;
+			end
+			else
+			begin
+				w_select_way = 'b1;
+			end
+		end
 		else
 		begin
-			r_select_way = lru_rp[i_index];
+			w_select_way = lru_rp[w_index];
 		end
     end
 
     //tagbank connections
-    logic [INDEX_WIDTH - 1 : 0]w1_index;
-    logic [TAG_WIDTH - 1 : 0]w1_tag_data;
-	logic [INDEX_WIDTH - 1 : 0]w2_index;
-    logic [TAG_WIDTH - 1 : 0]w2_tag_data;
     always_comb
 	begin
-        tagbank_wdata = w2_tag_data;
-        tagbank_waddr = w2_index;
-		tagbank_we[0] = ~w2_select_way ? we_btb :1'b0;
-        tagbank_we[1] = w2_select_way ? we_btb :1'b0;
-		  
+        tagbank_wdata = w_tag;
+        tagbank_waddr = w_index;
+		tagbank_we[w_select_way] = we_btb;
+		tagbank_we[~w_select_way] = '0;
 		tagbank_raddr = i_index_next;
 	end
 
-    //targetbank connections
-    logic [ADDR_WIDTH - 1 : 0]w_target_data;
+    //databank connections
     always_comb
 	begin
-        targetbank_wdata = w_target_data;
-        targetbank_waddr = w2_index;
-		targetbank_we[0] = ~w2_select_way ? we_btb :1'b0;
-        targetbank_we[1] = w2_select_way ? we_btb :1'b0;
-		  
-		targetbank_raddr = i_index_next;
+        databank_wdata = w_target;
+        databank_waddr = w_index;
+		databank_we[w_select_way] = we_btb;
+        databank_we[~w_select_way] = '0;
+		databank_raddr = i_index_next;
 	end
+
     //read outputs
     always_comb
 	begin
 		hit_out = hit;
-		r_target = targetbank_rdata[r_select_way];
+		r_target = databank_rdata[r_select_way];
 	end
-	
 	
     always_ff @(posedge clk)
 	begin
+		last_pc_next <= i_pc_next;
+		last_i_pc <= i_req_pc;
 		if(~rst_n)
 		begin
 			for (int i=0; i<DEPTH;i++)
@@ -390,23 +415,11 @@ module branch_target_buffer #(
 		end
 		else
 		begin
-            lru_rp[i_index] <= ~r_select_way;
-            if(~hit)
-            begin
-				//data for write locked in for miss(will write 2 cycles after miss and branch confirm)
-                w1_tag_data <= i_tag;
-                 
-                w1_index <= i_index;
-                w1_select_way <= r_select_way;
-            end
-				//set valid bit on a write(will be valid cycle after write)
-				valid_bits[w2_index][w2_select_way] <=we_btb;
-				//data for write (will write cycle after miss and branch confirm)
-				w2_tag_data <= w1_tag_data;  
-				w2_index <= w1_index;
-				w2_select_way <= w1_select_way;
-				//target from decode sent to write
-				w_target_data <= w_target;
+			if(hit)
+				lru_rp[i_index] <= ~r_select_way;
+
+			if(we_btb)
+				valid_bits[w_select_way][w_index] <= '1;
       end
 	end
 endmodule
@@ -429,10 +442,10 @@ module branch_resolver (
 				: i_reg_data.rt_data;
 
 			if(i_decoded.is_jump | i_decoded.is_branch_jump) begin
-				o_branch_resolution.valid = 1'b1;
+				o_branch_resolution.is_branch = 1'b1;
 				o_branch_resolution.outcome = TAKEN; //Default to taken for jumps - branches get corrected later
 			end else begin
-				o_branch_resolution.valid = 1'b0;
+				o_branch_resolution.is_branch = 1'b0;
 				o_branch_resolution.outcome = NOT_TAKEN;
 			end
 
@@ -449,10 +462,18 @@ module branch_resolver (
 				end
 			endcase
 
-			if(o_branch_resolution.valid & o_branch_resolution.outcome)
-				o_branch_resolution.target = i_decoded.branch_target;
+			// if(o_branch_resolution.is_branch & o_branch_resolution.outcome)
+			if(o_branch_resolution.is_branch)
+				o_branch_resolution.target = i_decoded.is_jump_reg
+									? i_reg_data.rs_data[`ADDR_WIDTH - 1 : 0]
+									: i_decoded.branch_target;
 			else
-				o_branch_resolution.target = i_pc.pc + `ADDR_WIDTH'd4;
+				o_branch_resolution.target = '1; //If you try to take this, the program will crash.
+		end
+		else 
+		begin
+			o_branch_resolution.is_branch = 1'b0;
+			o_branch_resolution.outcome = NOT_TAKEN;
 		end
 	end
 endmodule

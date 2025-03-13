@@ -40,7 +40,7 @@ module fetch_unit (
 			end
 			else
 			begin
-				if(i_branch_prediction.valid & i_branch_prediction.prediction)
+				if(i_branch_prediction.is_branch & i_branch_prediction.prediction)
 					o_pc_next.pc = i_branch_prediction.target;
 				else
 					o_pc_next.pc = o_pc_current.pc + `ADDR_WIDTH'd4;

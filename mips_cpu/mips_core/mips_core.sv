@@ -62,6 +62,7 @@ module mips_core (
 	pc_ifc i2d_pc();
 	cache_output_ifc i2d_inst();
 	branch_prediction_ifc i2d_pred();
+	branch_prediction_ifc i2d_pred_pass_through();
 
 	// |||| DEC Stage
 	decoder_output_ifc dec_decoder_output();
@@ -70,6 +71,7 @@ module mips_core (
 	branch_resolution_ifc dec_branch_resolved();
 	alu_input_ifc dec_alu_input();
 	alu_pass_through_ifc dec_alu_pass_through();
+	branch_prediction_ifc d2e_pred();
 
 	// ==== DEC to EX
 	pc_ifc d2e_pc();
@@ -146,12 +148,11 @@ module mips_core (
 	branch_controller BRANCH_CONTROLLER(
 		.clk, .rst_n,
 
+		.i_hc         			(i2i_hc),
 		.if_pc		  			(if_pc_next),
 		.if_branch_prediction	(if_branch_prediction),
 		
-		//FIXME: resolution goes here.
-		//Pretty sure we can resolve branch in decode and put it back in here...
-		.dec_pc					(d2e_pc),
+		.dec_pc					(i2d_pc),
 		.dec_branch_resolved	(dec_branch_resolved)
 	);
 	// If you want to change the line size and total size of instruction cache,
@@ -217,9 +218,6 @@ module mips_core (
 		.i_decoded          (dec_decoder_output),
 		.i_reg_data         (dec_forward_unit_output),
 
-		// .branch_decoded     (dec_branch_decoded),
-		.branch_resolved	(dec_branch_resolved),
-
 		.o_alu_input        (dec_alu_input),
 		.o_alu_pass_through (dec_alu_pass_through)
 	);
@@ -236,7 +234,9 @@ module mips_core (
 		.i_alu_input        (dec_alu_input),
 		.o_alu_input        (d2e_alu_input),
 		.i_alu_pass_through (dec_alu_pass_through),
-		.o_alu_pass_through (d2e_alu_pass_through)
+		.o_alu_pass_through (d2e_alu_pass_through),
+		.i_pred (i2d_pred_pass_through),	
+		.o_pred	(d2e_pred)	
 	);
 
 	// ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -324,12 +324,14 @@ module mips_core (
 		.clk, .rst_n,
 
 		.if_i_cache_output,
-		.dec_branch_prediction(i2d_pred),
+		.if_branch_prediction(i2d_pred),
+		.dec_branch_prediction(d2e_pred),
 		.dec_pc(i2d_pc),
 		.dec_branch_resolved(dec_branch_resolved),
-		.ex_pc(d2e_pc),
 		.lw_hazard,
 		.mem_done,
+
+		.if_branch_prediction_pass_through(i2d_pred_pass_through),
 
 		.i2i_hc,
 		.i2d_hc,

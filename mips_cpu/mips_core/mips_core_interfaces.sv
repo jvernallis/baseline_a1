@@ -36,7 +36,7 @@ endinterface
 // This interface predicts a branch - but now, its validity and target are predicted,
 // instead of decoded.
 interface branch_prediction_ifc ();
-	logic valid;	// High means the instruction is a branch or a jump
+	logic is_branch; // High means the instruction is a branch or a jump
 	// For simplicity: no jump prediction for now
 	// Jumps predicted as branches.
 	//logic is_jump;	// High means the instruction is a jump
@@ -44,21 +44,21 @@ interface branch_prediction_ifc ();
 
 	mips_core_pkg::BranchOutcome prediction;
 
-	modport in (input valid, target, prediction);
-	modport out (output valid, target, prediction);
+	modport in (input is_branch, target, prediction);
+	modport out (output is_branch, target, prediction);
 endinterface
 
 // Note: Replacement for branch_result_ifc.
 // This interface is the resolution of a branch - filling in information about its validity,
 // target, and decision.
 interface branch_resolution_ifc ();
-	logic valid; // High means the instruction was decoded to be a branch or a jump
+	logic is_branch; // High means the instruction was decoded to be a branch or a jump
 	logic [`ADDR_WIDTH - 1 : 0] target; // The decoded branch target
 	mips_core_pkg::BranchOutcome prediction; // The predicted branch decision
 	mips_core_pkg::BranchOutcome outcome; // The evaluated branch decision
 
-	modport in  (input valid, target, prediction, outcome);
-	modport out  (output valid, target, prediction, outcome);
+	modport in  (input is_branch, target, prediction, outcome);
+	modport out  (output is_branch, target, prediction, outcome);
 endinterface
 
 interface alu_pass_through_ifc ();

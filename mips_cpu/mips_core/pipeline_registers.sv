@@ -36,7 +36,7 @@ module pr_i2d (
 			o_pc.pc <= '0;
 			o_inst.valid <= 1'b0;
 			o_inst.data <= '0;
-			o_pred.valid <= 1'b0;
+			o_pred.is_branch <= 1'b0;
 			o_pred.target <= '0;
 			o_pred.prediction <= NOT_TAKEN;
 		end
@@ -49,7 +49,7 @@ module pr_i2d (
 					o_pc.pc <= '0;
 					o_inst.valid <= 1'b0;
 					o_inst.data <= '0;
-					o_pred.valid <= 1'b0;
+					o_pred.is_branch <= 1'b0;
 					o_pred.target <= '0;
 					o_pred.prediction <= NOT_TAKEN;
 				end
@@ -58,7 +58,7 @@ module pr_i2d (
 					o_pc.pc <= i_pc.pc;
 					o_inst.valid <= i_inst.valid;
 					o_inst.data <= i_inst.data;
-					o_pred.valid <= i_pred.valid;
+					o_pred.is_branch <= i_pred.is_branch;
 					o_pred.target <= i_pred.target;
 					o_pred.prediction <= i_pred.prediction;
 				end
@@ -80,7 +80,9 @@ module pr_d2e (
 	alu_input_ifc.in  i_alu_input,
 	alu_input_ifc.out o_alu_input,
 	alu_pass_through_ifc.in  i_alu_pass_through,
-	alu_pass_through_ifc.out o_alu_pass_through
+	alu_pass_through_ifc.out o_alu_pass_through,
+	branch_prediction_ifc.in i_pred,
+	branch_prediction_ifc.out o_pred
 );
 
 	always_ff @(posedge clk)
@@ -106,6 +108,10 @@ module pr_d2e (
 
 			o_alu_pass_through.uses_rw <= 1'b0;
 			o_alu_pass_through.rw_addr <= zero;
+
+			o_pred.is_branch <= 1'b0;
+			o_pred.target <= '0;
+			o_pred.prediction <= NOT_TAKEN;
 		end
 		else
 		begin
@@ -132,6 +138,10 @@ module pr_d2e (
 
 					o_alu_pass_through.uses_rw <= 1'b0;
 					o_alu_pass_through.rw_addr <= zero;
+
+					o_pred.is_branch <= 1'b0;
+					o_pred.target <= '0;
+					o_pred.prediction <= NOT_TAKEN;
 				end
 				else
 				begin
@@ -153,6 +163,10 @@ module pr_d2e (
 
 					o_alu_pass_through.uses_rw <= i_alu_pass_through.uses_rw;
 					o_alu_pass_through.rw_addr <= i_alu_pass_through.rw_addr;
+
+					o_pred.is_branch <= i_pred.is_branch;
+					o_pred.target <= i_pred.target;
+					o_pred.prediction <= i_pred.prediction;
 				end
 			end
 		end

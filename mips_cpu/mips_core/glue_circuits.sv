@@ -21,7 +21,7 @@ module decode_stage_glue (
 	reg_file_output_ifc.in i_reg_data,
 
 	//branch_decoded_ifc.decode branch_decoded,	// Contains both i/o
-	branch_resolution_ifc.out branch_resolved,
+	//branch_resolution_ifc.out branch_resolved,
 
 	alu_input_ifc.out o_alu_input,
 	alu_pass_through_ifc.out o_alu_pass_through
@@ -42,10 +42,10 @@ module decode_stage_glue (
 		// 	? i_reg_data.rs_data[`ADDR_WIDTH - 1 : 0]
 		// 	: i_decoded.branch_target;
 
-		branch_resolved.valid = i_decoded.is_branch_jump;
-		branch_resolved.target = i_decoded.is_jump_reg
-		 	? i_reg_data.rs_data[`ADDR_WIDTH - 1 : 0]
-		 	: i_decoded.branch_target;
+		// branch_resolved.valid = i_decoded.is_branch_jump;
+		// branch_resolved.target = i_decoded.is_jump_reg
+		//  	? i_reg_data.rs_data[`ADDR_WIDTH - 1 : 0]
+		//  	: i_decoded.branch_target;
 
 		// o_alu_pass_through.is_branch =     i_decoded.is_branch_jump & ~i_decoded.is_jump;
 		// o_alu_pass_through.prediction =    branch_decoded.prediction;
