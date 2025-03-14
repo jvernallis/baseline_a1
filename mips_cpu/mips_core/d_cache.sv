@@ -325,12 +325,17 @@ module d_cache #(
 				shift_rdata[i] <= databank_rdata[r_select_way][i];
 	end
 
+
+	logic [$clog2(4)-1:0]select_way_psudo;
+	logic [$clog2(4)-1:0] lru_rp_psudo[DEPTH],a;
 	always_ff @(posedge clk)
 	begin
+		a <= lru_rp_psudo[0];
 		if(~rst_n)
 		begin
 			state <= STATE_READY;
 			databank_select <= 1;
+			select_way_psudo <= 'b0;
 			for (int i=0; i<ASSOCIATIVITY;i++)
 				valid_bits[i] <= '0;
 			for (int i=0; i<DEPTH;i++)
@@ -339,7 +344,6 @@ module d_cache #(
 		else
 		begin
 			state <= next_state;
-
 			case (state)
 				STATE_READY:
 				begin
@@ -353,6 +357,7 @@ module d_cache #(
 						dirty_bits[select_way][i_index] <= 1'b1;
 					if (in.valid)
 					begin
+						select_way_psudo <= select_way_psudo +1;
 						lru_rp[i_index] <= ~select_way;
 					end
 				end
@@ -379,4 +384,19 @@ module d_cache #(
 			endcase
 		end
 	end
+
+
+	genvar h;
+	generate 
+	for (h = 0; h<1;h++) begin : psudo_lrus
+	psudo_lru LRU(
+		.clk,
+		.rst_n,
+		.lru_en(in.valid && (state == STATE_READY)),
+		.select_way(a),
+		.lru_rp(lru_rp_psudo[0])
+	);
+		
+	end
+	endgenerate
 endmodule
