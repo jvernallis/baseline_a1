@@ -108,7 +108,6 @@ module d_cache #(
 
 	logic [$clog2(ASSOCIATIVITY)-1:0]select_way;
 	logic [$clog2(ASSOCIATIVITY)-1:0]r_select_way;
-	logic [$clog2(ASSOCIATIVITY)-1:0]lru_rp[DEPTH - 1 : 0] ;
 
 	// databanks
 	genvar g,w;
@@ -171,6 +170,7 @@ module d_cache #(
 	logic last_flush_word;
 	logic last_refill_word;
 
+
 	always_comb
 	begin
 		tag_hit = ( ((i_tag == tagbank_rdata[0]) & valid_bits[0][i_index])
@@ -205,7 +205,14 @@ module d_cache #(
 		end
 		else if (miss)
 		begin
-			select_way = lru_rp_psudo[i_index];
+			if(lip_lru)begin
+				select_way = lru_rp_psudo[i_index];
+			end
+			else 
+			begin
+				select_way = mru_rp[i_index];
+			end
+			//select_way = 'b0;
 		end
 		else
 		begin
@@ -339,19 +346,18 @@ module d_cache #(
 
 
 
-	logic [$clog2(4)-1:0] lru_rp_psudo[DEPTH],a;
+	logic [$clog2(4)-1:0] lru_rp_psudo[DEPTH],mru_rp,lip_rp;
+	logic lip_lru;
 	always_ff @(posedge clk)
 	begin
-		a <= lru_rp_psudo[0];
 		if(~rst_n)
 		begin
 			state <= STATE_READY;
 			databank_select <= 1;
-			//select_way_psudo <= 'b0;
 			for (int i=0; i<ASSOCIATIVITY;i++)
 				valid_bits[i] <= '0;
 			for (int i=0; i<DEPTH;i++)
-				lru_rp[i] <= 0;
+				mru_rp[i] <= 0;
 		end
 		else
 		begin
@@ -363,14 +369,15 @@ module d_cache #(
 					begin
 						r_tag <= i_tag;
 						r_index <= i_index;
-						r_select_way <= lru_rp_psudo[i_index];//select_way;
+						//r_select_way <= lru_rp_psudo[i_index];
+						r_select_way <=  select_way;//mru_rp[i_index];
+						lip_lru <= mru_rp[i_index] == select_way;
 					end
 					else if (in.mem_action == WRITE)
 						dirty_bits[select_way][i_index] <= 1'b1;
 					if (in.valid)
 					begin
-						//select_way_psudo <= select_way_psudo +1;
-						//lru_rp[i_index] <= lru_rp_psudo[i_index];
+						mru_rp[i_index] <= select_way;
 					end
 				end
 
