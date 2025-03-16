@@ -39,7 +39,7 @@ interface d_cache_input_ifc ();
 endinterface
 
 module d_cache #(
-	parameter INDEX_WIDTH = 5,  // 2 * 1 KB Cache Size 
+	parameter INDEX_WIDTH = 6,  // 2 * 1 KB Cache Size 
 	parameter BLOCK_OFFSET_WIDTH = 2,
 	parameter ASSOCIATIVITY = 4
 	)(
@@ -170,6 +170,8 @@ module d_cache #(
 	logic last_flush_word;
 	logic last_refill_word;
 
+	logic [$clog2(ASSOCIATIVITY)-1:0]lip_lru;
+	logic deticated_LRU_set,deticated_BIP_set;
 
 	always_comb
 	begin
@@ -186,33 +188,66 @@ module d_cache #(
 	
 		if (hit)
 		begin
-			if (i_tag == tagbank_rdata[0])
-			begin
-				select_way = 'b00;
-			end
-			else if(i_tag == tagbank_rdata[1])
-			begin
-				select_way = 'b01;
-			end
-			else if (i_tag == tagbank_rdata[2])
-			begin
-				select_way = 'b10;
-			end
-			else
-			begin
-				select_way = 'b11;
-			end
+			if (i_tag == tagbank_rdata[0]& valid_bits[0][i_index])
+            begin
+                select_way = 'b00;
+            end
+            else if((i_tag == tagbank_rdata[1]) & valid_bits[1][i_index])
+            begin
+                select_way = 'b01;
+            end
+            else if ((i_tag == tagbank_rdata[2]) & valid_bits[2][i_index])
+            begin
+                select_way = 'b10;
+            end
+            else if((i_tag == tagbank_rdata[3]) & valid_bits[3][i_index])
+            begin
+                select_way = 'b11;
+            end
+            else begin
+                select_way = 'b00;
+            end
+
 		end
 		else if (miss)
 		begin
-			if(lip_lru)begin
-				select_way = lru_rp_psudo[i_index];
+			//lip lru implementation
+			if(lip_lru_valid || ~(valid_bits[0][i_index]&valid_bits[1][i_index]&valid_bits[2][i_index]&valid_bits[3][i_index]))begin
+				lip_lru = lru_rp_psudo[i_index];
 			end
 			else 
 			begin
-				select_way = mru_rp[i_index];
+				lip_lru = mru_rp[i_index];
 			end
-			//select_way = 'b0;
+			//cache set dualing deticated set signals
+			deticated_LRU_set = i_index[5:3] == i_index[2:0];
+			deticated_BIP_set = i_index[5:3] == ~i_index[2:0];
+			//cache set dualing mux
+			case({deticated_LRU_set,deticated_BIP_set})
+			'b00: begin 
+				if((~psel[INDEX_WIDTH-1]) | (bip_ctr == 0))begin
+					select_way = lru_rp_psudo[i_index];
+				end
+				else begin
+					select_way = lip_lru[i_index];
+				end
+			end
+			'b01: begin
+				if((~psel[INDEX_WIDTH-1]) | (bip_ctr == 0))begin
+					select_way = lru_rp_psudo[i_index];
+				end
+				else begin
+					select_way = lip_lru[i_index];
+				end
+			end
+			'b10: begin
+				select_way = lru_rp_psudo[i_index];
+			end
+			default : begin select_way = 
+				lru_rp_psudo[i_index];
+			end
+			endcase
+			
 		end
 		else
 		begin
@@ -347,13 +382,17 @@ module d_cache #(
 
 
 	logic [$clog2(4)-1:0] lru_rp_psudo[DEPTH],mru_rp,lip_rp;
-	logic lip_lru;
+	logic [4:0] bip_ctr;
+	logic [INDEX_WIDTH-1:0] psel;
+	logic lip_lru_valid;
 	always_ff @(posedge clk)
 	begin
 		if(~rst_n)
 		begin
 			state <= STATE_READY;
 			databank_select <= 1;
+			bip_ctr <= 'b0;
+			psel <= {'b0,{(INDEX_WIDTH-1){1'b1}}};
 			for (int i=0; i<ASSOCIATIVITY;i++)
 				valid_bits[i] <= '0;
 			for (int i=0; i<DEPTH;i++)
@@ -371,13 +410,20 @@ module d_cache #(
 						r_index <= i_index;
 						//r_select_way <= lru_rp_psudo[i_index];
 						r_select_way <=  select_way;//mru_rp[i_index];
-						lip_lru <= mru_rp[i_index] == select_way;
+						lip_lru_valid <= mru_rp[i_index] == select_way;
+						bip_ctr <= bip_ctr + 1;
 					end
 					else if (in.mem_action == WRITE)
 						dirty_bits[select_way][i_index] <= 1'b1;
 					if (in.valid)
 					begin
 						mru_rp[i_index] <= select_way;
+						if(i_index[5:3] == i_index[2:0])begin
+							psel <= miss ? psel+1:psel;
+						end
+						else if(i_index[5:3] == ~i_index[2:0])begin
+							psel <= miss ? psel-1:psel;
+						end
 					end
 				end
 
@@ -408,7 +454,7 @@ module d_cache #(
 	genvar h;
 	generate 
 	for (h = 0; h<DEPTH;h++) begin : psudo_lrus
-	psudo_lru LRU(
+	four_way_lru LRU(
 		.clk,
 		.rst_n,
 		.lru_en(in.valid && (state == STATE_READY) && (i_index == h)),
