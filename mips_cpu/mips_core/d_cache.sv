@@ -39,7 +39,7 @@ interface d_cache_input_ifc ();
 endinterface
 
 module d_cache #(
-	parameter INDEX_WIDTH = 6,  // 2 * 1 KB Cache Size 
+	parameter INDEX_WIDTH = 5,  // 2 * 1 KB Cache Size 
 	parameter BLOCK_OFFSET_WIDTH = 2,
 	parameter ASSOCIATIVITY = 4
 	)(
@@ -220,8 +220,8 @@ module d_cache #(
 				lip_lru = mru_rp[i_index];
 			end
 			//cache set dualing deticated set signals
-			deticated_LRU_set = i_index[5:3] == i_index[2:0];
-			deticated_BIP_set = i_index[5:3] == ~i_index[2:0];
+			deticated_LRU_set = i_index[3:2] == i_index[1:0];
+			deticated_BIP_set = i_index[3:2] == ~i_index[1:0];
 			//cache set dualing mux
 			case({deticated_LRU_set,deticated_BIP_set})
 			'b00: begin 
@@ -418,10 +418,10 @@ module d_cache #(
 					if (in.valid)
 					begin
 						mru_rp[i_index] <= select_way;
-						if(i_index[5:3] == i_index[2:0])begin
+						if(i_index[3:2] == i_index[1:0])begin
 							psel <= miss ? psel+1:psel;
 						end
-						else if(i_index[5:3] == ~i_index[2:0])begin
+						else if(i_index[3:2] == ~i_index[1:0])begin
 							psel <= miss ? psel-1:psel;
 						end
 					end
