@@ -26,16 +26,18 @@ module hazard_controller (
 
 	// Feedback from IF
 	cache_output_ifc.in if_i_cache_output,
+	branch_prediction_ifc.in if_branch_prediction, 
+	// Note: This is the prediction that was made in last cycle's fetch, 
+	// which is to be checked against the resolution made in this cycle's decode.
+	branch_prediction_ifc.in dec_branch_prediction, 
+	
 	// Feedback from DEC
 	pc_ifc.in dec_pc,
-	branch_decoded_ifc.hazard dec_branch_decoded,
-	// Feedback from EX
-	pc_ifc.in ex_pc,
+	branch_resolution_ifc.in dec_branch_resolved,
 	input lw_hazard,
-	branch_result_ifc.in ex_branch_result,
-	// Feedback from MEM
 	input mem_done,
 
+	branch_prediction_ifc.out if_branch_prediction_pass_through,
 	// Hazard control output
 	hazard_control_ifc.out i2i_hc,
 	hazard_control_ifc.out i2d_hc,
@@ -46,36 +48,88 @@ module hazard_controller (
 	// Load pc output
 	load_pc_ifc.out load_pc
 );
-
-	branch_controller BRANCH_CONTROLLER (
-		.clk, .rst_n,
-		.dec_pc,
-		.dec_branch_decoded,
-		.ex_pc,
-		.ex_branch_result
-	);
+	// Branch controller moved to MIPS core
+	// branch_controller BRANCH_CONTROLLER (
+	// 	.clk, .rst_n,
+	// 	.dec_pc,
+	// 	.dec_branch_resolved,
+	// 	.ex_pc,
+	// );
 
 	// We have total 6 potential hazards
 	logic ic_miss;			// I cache miss
 	// Gone without delay slots:
 	//logic ds_miss;			// Delay slot miss
-	logic dec_overload;		// Branch predict taken or Jump
-	logic ex_overload;		// Branch prediction wrong
+	// Gone with branch resolution moved to decode
+	//logic dec_overload;		// Branch predict taken or Jump
+
+	// "Branch prediction wrong now entails:"
+	// Incorrect prediction as to if it was/wasn't a branch,
+	// Incorrect target prediction,
+	// Incorrect decision prediction
+	// And the overload now happens in dec.
+	logic dec_overload;		// Branch prediction wrong
 	//    lw_hazard;		// Load word hazard (input from forward unit)
 	logic dc_miss;			// D cache miss
+
+	logic branch_correct;
+	logic branch_missed; 			// Branch was not identified as a branch from BTB
+	logic branch_misidentified; 	// Non-branch was identified as a branch from BTB
+	logic branch_target_wrong;				// Branch target was incorrect
+	logic branch_mispredicted;		// Branch decision was incorrect
 
 	// Determine if we have these hazards
 	always_comb
 	begin
 		ic_miss = ~if_i_cache_output.valid;
-		//ds_miss = ic_miss & dec_branch_decoded.valid;
-		dec_overload = dec_branch_decoded.valid
-			& (dec_branch_decoded.is_jump
-				| (dec_branch_decoded.prediction == TAKEN));
-		ex_overload = ex_branch_result.valid
-			& (ex_branch_result.prediction != ex_branch_result.outcome);
-		// lw_hazard is determined by forward unit.
+		//ds_miss = ic_miss & dec_branch_resolved.is_branch;
+		// dec_overload = dec_branch_resolved.is_branch
+		// 	& (dec_branch_resolved.is_jump
+		// 		| (dec_branch_resolved.prediction == TAKEN));
+
+		// Overloaded needed only if the wrong path was taken
+		branch_correct = (dec_branch_prediction.is_branch & dec_branch_resolved.is_branch) & 
+						 (dec_branch_prediction.prediction == dec_branch_resolved.outcome) &
+						 (dec_branch_prediction.target == dec_branch_resolved.target);
+
+		dec_overload =
+			(!dec_branch_prediction.is_branch & dec_branch_resolved.is_branch)
+			| (dec_branch_prediction.is_branch & !dec_branch_resolved.is_branch)
+			| (dec_branch_resolved.is_branch & 
+			((dec_branch_prediction.target != dec_branch_resolved.target)
+			| (dec_branch_prediction.prediction != dec_branch_resolved.outcome)));
+
+		branch_missed = 0;
+		branch_misidentified = 0;
+		branch_target_wrong = 0;
+		branch_mispredicted = 0;
+		if(dec_overload) begin
+			if (!dec_branch_prediction.is_branch & dec_branch_resolved.is_branch) 
+				branch_missed = 1;
+			else if (dec_branch_prediction.is_branch & !dec_branch_resolved.is_branch) 
+				branch_misidentified = 1;
+			else if (dec_branch_prediction.target != dec_branch_resolved.target)
+				branch_target_wrong = 1;
+			else if (dec_branch_prediction.prediction != dec_branch_resolved.outcome)
+				branch_mispredicted = 1;
+		end
 		dc_miss = ~mem_done;
+	end
+
+	always_comb
+	begin
+		if(!if_flush) 
+		begin
+			i2d_pred_pass_through.is_branch = i2d_pred.is_branch;
+			i2d_pred_pass_through.target = i2d_pred.target;
+			i2d_pred_pass_through.prediction = i2d_pred.prediction;
+		end
+		else
+		begin
+			i2d_pred_pass_through.is_branch = '0;
+			i2d_pred_pass_through.target = '0;
+			i2d_pred_pass_through.prediction = NOT_TAKEN;
+		end
 	end
 
 	// Control signals
@@ -122,13 +176,8 @@ module hazard_controller (
 			if_flush = 1'b1;
 		end
 
-		if (ex_overload)
+		if(dec_overload)  
 		begin
-			if_stall = 1'b0;
-			if_flush = 1'b1;
-		end
-
-		if(dec_overload) begin
 			if_stall = 1'b0;
 			if_flush = 1'b1;
 		end
@@ -142,7 +191,6 @@ module hazard_controller (
 		dec_stall = 1'b0;
 		dec_flush = 1'b0;
 
-		//if (ds_miss | lw_hazard)
 		if (lw_hazard)
 		begin
 			dec_stall = 1'b1;
@@ -151,9 +199,6 @@ module hazard_controller (
 
 		if (ex_stall)
 			dec_stall = 1'b1;
-
-		if(ex_overload)
-			dec_flush = 1'b1;
 	end
 
 	always_comb
@@ -186,11 +231,11 @@ module hazard_controller (
 	// Derive the load_pc
 	always_comb
 	begin
-		load_pc.we = dec_overload | ex_overload;
-		if (dec_overload)
-			load_pc.new_pc = dec_branch_decoded.target;
+		load_pc.we = dec_overload;
+		if(dec_branch_resolved.is_branch & dec_branch_resolved.outcome == TAKEN)
+			load_pc.new_pc = dec_branch_resolved.target;
 		else
-			load_pc.new_pc = ex_branch_result.recovery_target;
+			load_pc.new_pc = dec_pc.pc + `ADDR_WIDTH'd8;
 	end
 
 `ifdef SIMULATION
@@ -199,7 +244,7 @@ module hazard_controller (
 		if (ic_miss) stats_event("ic_miss");
 		// if (ds_miss) stats_event("ds_miss");
 		if (dec_overload) stats_event("dec_overload");
-		if (ex_overload) stats_event("ex_overload");
+		// if (ex_overload) stats_event("ex_overload");
 		if (lw_hazard) stats_event("lw_hazard");
 		if (dc_miss) stats_event("dc_miss");
 		if (if_stall) stats_event("if_stall");
@@ -210,6 +255,12 @@ module hazard_controller (
 		if (ex_flush) stats_event("ex_flush");
 		if (mem_stall) stats_event("mem_stall");
 		if (mem_flush) stats_event("mem_flush");
+
+		if (branch_missed) stats_event("branch_missed");
+		if (branch_misidentified) stats_event("branch_misidentified");
+		if (branch_target_wrong) stats_event("branch_target_wrong");
+		if (branch_mispredicted) stats_event("branch_mispredicted");
+		if (branch_correct) stats_event("branch_correct");
 	end
 `endif
 

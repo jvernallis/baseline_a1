@@ -32,24 +32,40 @@ interface cache_output_ifc ();
 	modport out (output valid, data);
 endinterface
 
-interface branch_decoded_ifc ();
-	logic valid;	// High means the instruction is a branch or a jump
-	logic is_jump;	// High means the instruction is a jump
+// Note: Similar to branch_decoded_ifc
+// This interface predicts a branch - but now, its validity and target are predicted,
+// instead of decoded.
+interface branch_prediction_ifc ();
+	logic is_branch; // High means the instruction is a branch or a jump
+	// For simplicity: no jump prediction for now
+	// Jumps predicted as branches.
+	//logic is_jump;	// High means the instruction is a jump
 	logic [`ADDR_WIDTH - 1 : 0] target;
 
 	mips_core_pkg::BranchOutcome prediction;
-	logic [`ADDR_WIDTH - 1 : 0] recovery_target;
 
-	modport decode (output valid, is_jump, target,
-		input prediction, recovery_target);
-	modport hazard (output prediction, recovery_target,
-		input valid, is_jump, target);
+	modport in (input is_branch, target, prediction);
+	modport out (output is_branch, target, prediction);
+endinterface
+
+// Note: Replacement for branch_result_ifc.
+// This interface is the resolution of a branch - filling in information about its validity,
+// target, and decision.
+interface branch_resolution_ifc ();
+	logic is_branch; // High means the instruction was decoded to be a branch or a jump
+	logic [`ADDR_WIDTH - 1 : 0] target; // The decoded branch target
+	mips_core_pkg::BranchOutcome prediction; // The predicted branch decision
+	mips_core_pkg::BranchOutcome outcome; // The evaluated branch decision
+
+	modport in  (input is_branch, target, prediction, outcome);
+	modport out  (output is_branch, target, prediction, outcome);
 endinterface
 
 interface alu_pass_through_ifc ();
-	logic is_branch;
-	mips_core_pkg::BranchOutcome prediction;
-	logic [`ADDR_WIDTH - 1 : 0] recovery_target;
+	// Branch logic moved to decode.
+	// logic is_branch;
+	// mips_core_pkg::BranchOutcome prediction;
+	// logic [`ADDR_WIDTH - 1 : 0] recovery_target;
 
 	logic is_mem_access;
 	mips_core_pkg::MemAccessType mem_action;
@@ -58,21 +74,20 @@ interface alu_pass_through_ifc ();
 	logic uses_rw;
 	mips_core_pkg::MipsReg rw_addr;
 
-	modport in  (input is_branch, prediction, recovery_target, is_mem_access,
-		mem_action, sw_data, uses_rw, rw_addr);
-	modport out (output is_branch, prediction, recovery_target, is_mem_access,
-		mem_action, sw_data, uses_rw, rw_addr);
+	modport in  (input is_mem_access, mem_action, sw_data, uses_rw, rw_addr);
+	modport out (output is_mem_access, mem_action, sw_data, uses_rw, rw_addr);
 endinterface
 
-interface branch_result_ifc ();
-	logic valid;
-	mips_core_pkg::BranchOutcome prediction;
-	mips_core_pkg::BranchOutcome outcome;
-	logic [`ADDR_WIDTH - 1 : 0] recovery_target;
+// This interface is no longer needed as branch evaluation happens in decode.
+// interface branch_result_ifc ();
+// 	logic valid;
+// 	mips_core_pkg::BranchOutcome prediction;
+// 	mips_core_pkg::BranchOutcome outcome;
+// 	logic [`ADDR_WIDTH - 1 : 0] recovery_target;
 
-	modport in  (input valid, prediction, outcome, recovery_target);
-	modport out (output valid, prediction, outcome, recovery_target);
-endinterface
+// 	modport in  (input valid, prediction, outcome, recovery_target);
+// 	modport out (output valid, prediction, outcome, recovery_target);
+// endinterface
 
 interface d_cache_pass_through_ifc ();
 	logic is_mem_access;

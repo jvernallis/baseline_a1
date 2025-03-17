@@ -411,14 +411,16 @@ module decoder (
 
 				6'h01:  //bgez or bltz
 				begin
-					if( i_inst.data[16] )
+					if( i_inst.data[16] ) begin
 						out.alu_ctl = ALUCTL_BGEZ;
-					else
+					end else begin
 						out.alu_ctl = ALUCTL_BLTZ;
+					end
 					rs();
 					rt();
 					out.is_branch_jump = 1'b1;
 					out.branch_target = i_pc.pc + `ADDR_WIDTH'd4 + `ADDR_WIDTH'(signed'(i_inst.data[15:0]) << 2);
+					
 				end
 
 				6'h07:  //bgtz
@@ -554,5 +556,6 @@ module decoder (
 				end
 			endcase
 		end
+
 	end
 endmodule

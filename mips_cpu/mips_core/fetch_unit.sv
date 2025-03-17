@@ -25,6 +25,7 @@ module fetch_unit (
 
 	// Load pc
 	load_pc_ifc.in i_load_pc,
+	branch_prediction_ifc.in i_branch_prediction,
 
 	// Output pc
 	pc_ifc.out o_pc_current,
@@ -33,12 +34,20 @@ module fetch_unit (
 
 	always_comb
 	begin
-		if (!i_hc.stall)
-			o_pc_next.pc = i_load_pc.we
-				? i_load_pc.new_pc
-				: o_pc_current.pc + `ADDR_WIDTH'd4;
-		else
+		if (!i_hc.stall) begin
+			if(i_load_pc.we) begin
+				o_pc_next.pc = i_load_pc.new_pc;
+			end
+			else
+			begin
+				if(i_branch_prediction.is_branch & i_branch_prediction.prediction)
+					o_pc_next.pc = i_branch_prediction.target;
+				else
+					o_pc_next.pc = o_pc_current.pc + `ADDR_WIDTH'd4;
+			end
+		end else begin
 			o_pc_next.pc = o_pc_current.pc;
+		end
 	end
 
 	always_ff @(posedge clk)
