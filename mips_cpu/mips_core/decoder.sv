@@ -49,6 +49,8 @@ module decoder (
 	decoder_output_ifc.out out
 );
 
+assign out.thread_id = i_pc.thread_id; //mt
+
 	task rs;
 		begin
 			// Only set uses_rs if it is not register zero
