@@ -58,6 +58,8 @@ module decode_stage_glue (
 
 		o_alu_pass_through.uses_rw =       i_decoded.uses_rw;
 		o_alu_pass_through.rw_addr =       i_decoded.rw_addr;
+
+		o_alu_pass_through.thread_id = i_decoded.thread_id; // mt
 	end
 endmodule
 
@@ -88,6 +90,8 @@ module ex_stage_glue (
 		o_d_cache_pass_through.alu_result =    i_alu_output.result;
 		o_d_cache_pass_through.uses_rw =       i_alu_pass_through.uses_rw;
 		o_d_cache_pass_through.rw_addr =       i_alu_pass_through.rw_addr;
+
+		o_d_cache_pass_through.thread_id = i_alu_pass_through.thread_id; //mt
 	end
 endmodule
 
@@ -109,5 +113,7 @@ module mem_stage_glue (
 		o_write_back.rw_data = i_d_cache_pass_through.is_mem_access
 			? i_d_cache_output.data
 			: i_d_cache_pass_through.alu_result;
+
+		o_write_back.thread_id = i_d_cache_pass_through.thread_id; //mt
 	end
 endmodule
