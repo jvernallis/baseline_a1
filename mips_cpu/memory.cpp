@@ -5,29 +5,35 @@
 
 extern int memory_debug;
 
-Memory::Memory(const char *const hex_file, double delay_factor) : delay_factor(delay_factor)
+Memory::Memory(const char *const hex_files[2], double delay_factor) : delay_factor(delay_factor)
 {
-    std::ifstream f(hex_file);
-    if (!f.is_open())
-    {
-        std::cerr << "Failed to open file: " << hex_file << std::endl;
-        exit(-1);
-    }
+    const int NUM_THREADS = 2;
+    std::ifstream f[NUM_THREADS];
 
-    uint addr = 0;
-    uint32_t data;
-    if (memory_debug >= 3)
-        std::cout << std::hex << std::showbase;
-    while (f >> std::hex >> data)
-    {
+    for (int i = 0; i < NUM_THREADS; i++){
+        f[i].open(hex_files[i]);
+        if(!f[i].is_open()){
+            std::cerr << "Failed to open file: " << hex_files[i] << std::endl;
+            exit(-1);
+        }
+
+        uint addr = 0;
+        uint32_t data;
+        uint mask = i << (sizeof(unsigned int) * 8 - 9);
+        
         if (memory_debug >= 3)
-            std::cout << "Preload addr=" << addr << " data=" << data << std::endl;
-        m[addr++] = data;
-    }
-    if (memory_debug >= 3)
-        std::cout << std::noshowbase;
+            std::cout << std::hex << std::showbase;
+        while (f[i] >> std::hex >> data)
+        {
+            if (memory_debug >= 3)
+                std::cout << "Preload addr=" << addr << " data=" << data << std::endl;
+            m[addr++ ^ mask] = data;
+        }
+        if (memory_debug >= 3)
+            std::cout << std::noshowbase;
 
-    f.close();
+        f[i].close();
+    }
 }
 
 void Memory::process(uint64_t time)

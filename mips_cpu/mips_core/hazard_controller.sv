@@ -24,6 +24,8 @@ module hazard_controller (
 	input clk,    // Clock
 	input rst_n,  // Synchronous reset active low
 
+	thread_control_ifc.in i_tc,
+
 	// Feedback from IF
 	cache_output_ifc.in if_i_cache_output,
 	branch_prediction_ifc.in if_branch_prediction, 
@@ -71,6 +73,7 @@ module hazard_controller (
 	logic dec_overload;		// Branch prediction wrong
 	//    lw_hazard;		// Load word hazard (input from forward unit)
 	logic dc_miss;			// D cache miss
+	logic thread_switch;
 
 	logic branch_correct;
 	logic branch_missed; 			// Branch was not identified as a branch from BTB
@@ -114,6 +117,8 @@ module hazard_controller (
 				branch_mispredicted = 1;
 		end
 		dc_miss = ~mem_done;
+	
+		thread_switch = i_tc.thread_switch;
 	end
 
 	always_comb
@@ -184,6 +189,9 @@ module hazard_controller (
 
 		if (dec_stall)
 			if_stall = 1'b1;
+
+		if (thread_switch)
+			if_flush = 1'b1;
 	end
 
 	always_comb
@@ -199,18 +207,27 @@ module hazard_controller (
 
 		if (ex_stall)
 			dec_stall = 1'b1;
+
+		if (thread_switch)
+			dec_flush = 1'b1;
 	end
 
 	always_comb
 	begin : handle_ex
 		ex_stall = mem_stall;
 		ex_flush = 1'b0;
+
+		if (thread_switch)
+			ex_flush = 1'b1;
 	end
 
 	always_comb
 	begin : handle_mem
 		mem_stall = dc_miss;
 		mem_flush = dc_miss;
+
+		if (thread_switch)
+			mem_flush = 1'b1;
 	end
 
 	// Now distribute the control signals to each pipeline registers

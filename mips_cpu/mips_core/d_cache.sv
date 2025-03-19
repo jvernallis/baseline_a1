@@ -39,6 +39,7 @@ interface d_cache_input_ifc ();
 endinterface
 
 module d_cache #(
+	parameter NUM_THREADS = 2,
 	parameter INDEX_WIDTH = 5,  // 2 * 1 KB Cache Size 
 	parameter BLOCK_OFFSET_WIDTH = 2,
 	parameter ASSOCIATIVITY = 4
@@ -46,6 +47,8 @@ module d_cache #(
 	// General signals
 	input clk,    // Clock
 	input rst_n,  // Synchronous reset active low
+
+	thread_control_ifc.in i_tc,
 
 	// Request
 	d_cache_input_ifc.in in,
@@ -78,6 +81,8 @@ module d_cache #(
 	logic [BLOCK_OFFSET_WIDTH - 1 : 0] i_block_offset;
 
 	logic [INDEX_WIDTH - 1 : 0] i_index_next;
+	
+	logic write_thread;
 
 	assign {i_tag, i_index, i_block_offset} = in.addr[`ADDR_WIDTH - 1 : 2];
 	assign i_index_next = in.addr_next[BLOCK_OFFSET_WIDTH + 2 +: INDEX_WIDTH];
@@ -158,9 +163,9 @@ module d_cache #(
 	endgenerate
 
 	// Valid bits
-	logic [DEPTH - 1 : 0] valid_bits[ASSOCIATIVITY];
+	logic [DEPTH - 1 : 0] valid_bits[NUM_THREADS][ASSOCIATIVITY];
 	// Dirty bits
-	logic [DEPTH - 1 : 0] dirty_bits[ASSOCIATIVITY];
+	logic [DEPTH - 1 : 0] dirty_bits[NUM_THREADS][ASSOCIATIVITY];
 
 	// Shift registers for flushing
 	logic [`DATA_WIDTH - 1 : 0] shift_rdata[LINE_SIZE];
@@ -175,10 +180,10 @@ module d_cache #(
 
 	always_comb
 	begin
-		tag_hit = ( ((i_tag == tagbank_rdata[0]) & valid_bits[0][i_index])
-				  |	((i_tag == tagbank_rdata[1]) & valid_bits[1][i_index])
-				  |	((i_tag == tagbank_rdata[2]) & valid_bits[2][i_index])
-				  |	((i_tag == tagbank_rdata[3]) & valid_bits[3][i_index]));
+		tag_hit = ( ((i_tag == tagbank_rdata[0]) & valid_bits[i_tc.thread_id][0][i_index])
+				  |	((i_tag == tagbank_rdata[1]) & valid_bits[i_tc.thread_id][1][i_index])
+				  |	((i_tag == tagbank_rdata[2]) & valid_bits[i_tc.thread_id][2][i_index])
+				  |	((i_tag == tagbank_rdata[3]) & valid_bits[i_tc.thread_id][3][i_index]));
 		hit = in.valid
 			& (tag_hit)
 			& (state == STATE_READY);
@@ -188,19 +193,19 @@ module d_cache #(
 	
 		if (hit)
 		begin
-			if (i_tag == tagbank_rdata[0]& valid_bits[0][i_index])
+			if (i_tag == tagbank_rdata[0]& valid_bits[i_tc.thread_id][0][i_index])
             begin
                 select_way = 'b00;
             end
-            else if((i_tag == tagbank_rdata[1]) & valid_bits[1][i_index])
+            else if((i_tag == tagbank_rdata[1]) & valid_bits[i_tc.thread_id][1][i_index])
             begin
                 select_way = 'b01;
             end
-            else if ((i_tag == tagbank_rdata[2]) & valid_bits[2][i_index])
+            else if ((i_tag == tagbank_rdata[2]) & valid_bits[i_tc.thread_id][2][i_index])
             begin
                 select_way = 'b10;
             end
-            else if((i_tag == tagbank_rdata[3]) & valid_bits[3][i_index])
+            else if((i_tag == tagbank_rdata[3]) & valid_bits[i_tc.thread_id][3][i_index])
             begin
                 select_way = 'b11;
             end
@@ -212,7 +217,10 @@ module d_cache #(
 		else if (miss)
 		begin
 			//lip lru implementation
-			if(lip_lru_valid || ~(valid_bits[0][i_index]&valid_bits[1][i_index]&valid_bits[2][i_index]&valid_bits[3][i_index]))begin
+			if(lip_lru_valid || ~(valid_bits[i_tc.thread_id][0][i_index] 
+								& valid_bits[i_tc.thread_id][1][i_index] 
+								& valid_bits[i_tc.thread_id][2][i_index] 
+								& valid_bits[i_tc.thread_id][3][i_index]))begin
 				lip_lru = lru_rp[i_index];
 			end
 			else 
@@ -262,6 +270,8 @@ module d_cache #(
 		mem_write_address.AWID = 0;
 		mem_write_address.AWLEN = LINE_SIZE;
 		mem_write_address.AWADDR = {tagbank_rdata[r_select_way], i_index, {BLOCK_OFFSET_WIDTH + 2{1'b0}}};
+		// Experimental: Set memory address MSB to thread ID
+		mem_write_address.AWADDR = {write_thread, mem_write_address.AWADDR[`ADDR_WIDTH - 2 : 0]};
 		mem_write_data.WVALID = state == STATE_FLUSH_DATA;
 		mem_write_data.WID = 0;
 		mem_write_data.WDATA = shift_rdata[0];
@@ -273,6 +283,8 @@ module d_cache #(
 
 	always_comb begin
 		mem_read_address.ARADDR = {r_tag, r_index, {BLOCK_OFFSET_WIDTH + 2{1'b0}}};
+		// Experimental: Set memory address MSB to thread ID
+		mem_read_address.ARADDR = {i_tc.thread_id, mem_read_address.ARADDR[`ADDR_WIDTH - 2 : 0]};
 		mem_read_address.ARLEN = LINE_SIZE;
 		mem_read_address.ARVALID = state == STATE_REFILL_REQUEST;
 		mem_read_address.ARID = 4'd8;
@@ -336,10 +348,17 @@ module d_cache #(
 		unique case (state)
 			STATE_READY:
 				if (miss)
-					if (valid_bits[select_way][i_index] & dirty_bits[select_way][i_index])
+					if ((valid_bits[i_tc.thread_id][select_way][i_index] & dirty_bits[i_tc.thread_id][select_way][i_index]) | 
+						 valid_bits[~i_tc.thread_id][select_way][i_index] & dirty_bits[~i_tc.thread_id][select_way][i_index]) begin
+						if(dirty_bits[1'b0][select_way][i_index]) 
+							write_thread = 1'b0;
+						else if (dirty_bits[1'b1][select_way][i_index])
+							write_thread = 1'b1;
 						next_state = STATE_FLUSH_REQUEST;
-					else
+					end
+					else begin
 						next_state = STATE_REFILL_REQUEST;
+					end
 
 			STATE_FLUSH_REQUEST:
 				if (mem_write_address.AWREADY)
@@ -393,13 +412,24 @@ module d_cache #(
 			databank_select <= 1;
 			bip_ctr <= 'b0;
 			psel <= {'b0,{(INDEX_WIDTH-1){1'b1}}};
-			for (int i=0; i<ASSOCIATIVITY;i++)
-				valid_bits[i] <= '0;
+			
+			for (int i=0; i<NUM_THREADS;i++) begin
+				for (int j=0; j<ASSOCIATIVITY;j++)
+					valid_bits[i][j] <= '0;
 			for (int i=0; i<DEPTH;i++)
 				mru_rp[i] <= 0;
+			end
 		end
 		else
 		begin
+			// Experiment: Clear out valid bits on thread switch
+			// if(i_tc.current_thread_done) begin
+			// 	for (int i=0; i<ASSOCIATIVITY;i++)
+			// 		valid_bits[i] <= '0;
+			// 	for (int i=0; i<DEPTH;i++)
+			// 		lru_rp[i] <= 0;
+			// end
+
 			state <= next_state;
 			case (state)
 				STATE_READY:
@@ -414,7 +444,7 @@ module d_cache #(
 						bip_ctr <= bip_ctr + 1;
 					end
 					else if (in.mem_action == WRITE)
-						dirty_bits[select_way][i_index] <= 1'b1;
+						dirty_bits[i_tc.thread_id][select_way][i_index] <= 1'b1;
 					if (in.valid)
 					begin
 						mru_rp[i_index] <= select_way;
@@ -442,8 +472,10 @@ module d_cache #(
 
 					if (last_refill_word)
 					begin
-						valid_bits[r_select_way][r_index] <= 1'b1;
-						dirty_bits[r_select_way][r_index] <= 1'b0;
+						valid_bits[i_tc.thread_id][r_select_way][r_index] <= 1'b1;
+						valid_bits[~i_tc.thread_id][r_select_way][r_index] <= 1'b0;
+						dirty_bits[i_tc.thread_id][r_select_way][r_index] <= 1'b0;
+						dirty_bits[~i_tc.thread_id][r_select_way][r_index] <= 1'b0;
 					end
 				end
 			endcase

@@ -117,3 +117,20 @@ interface hazard_control_ifc ();
 	modport in  (input flush, stall);
 	modport out (output flush, stall);
 endinterface
+
+interface thread_control_ifc ();
+	logic thread_id; // ID of the active thread
+	logic thread_switch; //True on the cycle a thread switches
+	logic current_thread_done; // Done status of the active thread
+	logic thread_0_done; 
+	logic thread_1_done;
+
+	//logic temp_thread_switch; //Keeping this around for when I'm doing testing in both mips_core and the hazard controller
+
+	logic [`ADDR_WIDTH - 1 : 0] thread_resume_pc[2]; //PC to resume threads from
+
+	modport in (input thread_id, thread_switch, current_thread_done, thread_0_done, thread_1_done, thread_resume_pc);
+	modport out (output thread_id, thread_switch, current_thread_done, thread_0_done, thread_1_done, thread_resume_pc);
+
+	// modport thread_control (output thread_id, )
+endinterface

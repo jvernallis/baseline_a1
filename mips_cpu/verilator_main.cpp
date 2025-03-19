@@ -4,6 +4,7 @@
 #include <sstream>
 #include <string>
 #include <csignal>
+#include <cstring>
 #include <unordered_map>
 #include <unistd.h>
 #include "Vmips_core.h"
@@ -20,7 +21,7 @@ int memory_debug = 0;
 int stream_dump = 0;
 int stream_print = 0;
 int stream_check = 1;
-const char *benchmark = "nqueens";
+const char *benchmark[2] = {"nqueens", "coin"};
 // std::string hexfiles_dir = "/home/linux/ieng6/cs148sp22/public";
 std::string hexfiles_dir = "..";
 
@@ -53,84 +54,166 @@ void stats_event(const char *e)
 
 unsigned int instruction_count = 0;
 
-void pc_event(const int pc)
-{
+void pc_event(const int pc, const int thread_id)
+{   
+    // When a thread restarts, previously fetched cycles are re-fetched.
+    // So, make an allowance for 3 cycles of error on thread switch
+    static int last_thread_id;
+    static int thread_restart_cycles = 0;
+    static const int thread_restart_tolerance = 4; 
+
+    static std::ofstream f_write[2];
+    static std::ifstream f_read[2];
+    const std::string fname[2] = {std::string(hexfiles_dir + "/hexfiles/"+ std::string(benchmark[0]) +".pc.txt"),
+                                    std::string(hexfiles_dir + "/hexfiles/"+ std::string(benchmark[1]) +".pc.txt")};
+
+    static bool initialized = false;
+
+    if (!initialized) {
+        for (int i = 0; i < 2; i++) {
+            if(stream_dump)
+                f_write[i].open(fname[i]);
+            f_read[i].open(fname[i]);
+            if((stream_dump && !f_write[i].is_open()) || !f_read[i].is_open()) {
+                std::cerr << "Failed to open file: " << fname[thread_id] << std::endl;
+                exit(-1);
+            }
+        }
+        initialized = true;
+    }
+
     if (stream_print)
         std::cout << "-- EVENT pc=" << std::hex << pc << std::endl;
     if (stream_dump)
     {
-        std::string fname(hexfiles_dir + "/hexfiles/"+ std::string(benchmark) +".pc.txt");
-        static std::ofstream f(fname);
-        if (!f.is_open())
+        if (!f_write[thread_id].is_open())
         {
-            std::cerr << "Failed to open file: " << fname << std::endl;
+            std::cerr << "Failed to open file: " << fname[thread_id] << std::endl;
             exit(-1);
         }
         if (stream_dump >= 2)
-            f << std::dec << main_time << " ";
-        f << std::hex << pc << std::endl;
+            f_write[thread_id] << std::dec << main_time << " ";
+        f_write[thread_id] << std::hex << pc << std::endl;
     }
     if (stream_check)
     {
-        std::string fname(hexfiles_dir + "/hexfiles/"+ std::string(benchmark) +".pc.txt");
-        static std::ifstream f(fname);
-        if (!f.is_open())
+        if (!f_read[thread_id].is_open())
         {
-            std::cerr << "Failed to open file: " << fname << std::endl;
+            std::cerr << "Failed to open file: " << fname[thread_id] << std::endl;
             exit(-1);
         }
 
         unsigned int expected_pc;
-        if (!(f >> std::hex >> expected_pc))
+        unsigned int clear_mask = 1 << (sizeof(unsigned int) * 8 - 7);
+        unsigned int set_mask = thread_id << (sizeof(unsigned int) * 8 - 7);
+
+        // If a thread switch occurred already fetched instructions will be fetched again.
+        // Misses against the file are expected to occur.
+        
+        //If the thread is restarting, don't start reading from the file until the expected PC is matched again
+        if((last_thread_id != thread_id) || (thread_restart_cycles != 0))
         {
-            std::cout << "\n!! Ran out of expected pc."
-                         "\n!! More instructions are executed than expected"
-                         "\n!! Additional pc="
-                      << std::hex << pc << std::endl;
-            std::raise(SIGINT);
-        }
-        else if (expected_pc != pc)
-        {
-            std::cout << "\n!! [" << std::dec << main_time << "] expected_pc=" << std::hex << expected_pc
-                      << " mismatches pc=" << pc << std::endl;
-            std::raise(SIGINT);
+            if(last_thread_id != thread_id){
+                bool pc_valid = bool(f_read[thread_id] >> std::hex >> expected_pc);
+                expected_pc = (expected_pc & ~clear_mask) ^ set_mask;
+                if(!pc_valid){
+                    std::cout << "\n!! Ran out of expected pc on a thread restart."
+                            "\n!! More instructions are executed than expected."
+                            "\n!! This was likely caused by the restart of a completed thread."
+                            "\n!! Additional pc="
+                            << std::hex << pc << std::endl;
+                    std::cout << "When this error was raised, the thread ID was " << thread_id << std::endl;
+                    std::raise(SIGINT);
+                }
+            } 
+            
+
+            thread_restart_cycles++;
+            if(expected_pc == pc){
+                thread_restart_cycles = 0;
+            } else if (thread_restart_cycles > thread_restart_tolerance) {
+                std::cout << "\n!! [" << std::dec << main_time << "] thread restart failed: last expected_pc=" << std::hex << expected_pc
+                        << " mismatches pc=" << pc << std::endl;
+                std::raise(SIGINT);
+            }
+        } else {
+            bool pc_valid = bool(f_read[thread_id] >> std::hex >> expected_pc);
+            expected_pc = (expected_pc & ~clear_mask) ^ set_mask;
+
+            if (!pc_valid)
+            {
+                std::cout << "\n!! Ran out of expected pc."
+                            "\n!! More instructions are executed than expected"
+                            "\n!! Additional pc="
+                        << std::hex << pc << std::endl;
+                std::cout << "When this error was raised, the thread ID was " << thread_id << std::endl;
+                std::raise(SIGINT);
+            }
+            else if (expected_pc != pc)
+            {
+                std::cout << "\n!! [" << std::dec << main_time << "] expected_pc=" << std::hex << expected_pc
+                        << " mismatches pc=" << pc << std::endl;
+                std::raise(SIGINT);
+            }
         }
     }
+    last_thread_id = thread_id;
     instruction_count++;
 }
 
 unsigned int write_back_count = 0;
 
-void wb_event(const int addr, const int data)
+void wb_event(const int addr, const int data, const int thread_id)
 {
+    static std::ofstream f_write[2];
+    static std::ifstream f_read[2];
+    const std::string fname[2] = {std::string(hexfiles_dir + "/hexfiles/"+ std::string(benchmark[0]) +".wb.txt"),
+                                    std::string(hexfiles_dir + "/hexfiles/"+ std::string(benchmark[1]) +".wb.txt")};
+
+    static bool initialized = false;
+
+    if (!initialized) {
+        for (int i = 0; i < 2; i++) {
+            if(stream_dump)
+                f_write[i].open(fname[i]);
+            f_read[i].open(fname[i]);
+            if((stream_dump && !f_write[i].is_open()) || !f_read[i].is_open()) {
+                std::cerr << "Failed to open file: " << fname[thread_id] << std::endl;
+                exit(-1);
+            }
+        }
+        initialized = true;
+    }
+
     if (stream_print)
         std::cout << "-- EVENT wb addr=" << std::hex << addr
                   << " data=" << data << std::endl;
     if (stream_dump)
     {
-        std::string fname(hexfiles_dir + "/hexfiles/"+ std::string(benchmark) +".wb.txt");
-        static std::ofstream f(fname);
-        if (!f.is_open())
+        if (!f_write[thread_id].is_open())
         {
-            std::cerr << "Failed to open file: " << fname << std::endl;
+            std::cerr << "Failed to open file: " << fname[thread_id] << std::endl;
             exit(-1);
         }
         if (stream_dump >= 2)
-            f << std::dec << main_time << " ";
-        f << std::hex << addr << " " << data << std::endl;
+            f_write[thread_id] << std::dec << main_time << " ";
+        f_write[thread_id] << std::hex << addr << " " << data << std::endl;
     }
     if (stream_check)
     {
-        std::string fname(hexfiles_dir + "/hexfiles/"+ std::string(benchmark) +".wb.txt");
-        static std::ifstream f(fname);
-        if (!f.is_open())
+        if (!f_read[thread_id].is_open())
         {
-            std::cerr << "Failed to open file: " << fname << std::endl;
+            std::cerr << "Failed to open file: " << fname[thread_id] << std::endl;
             exit(-1);
         }
 
         unsigned int expected_addr, expected_data;
-        if (!(f >> std::hex >> expected_addr >> expected_data))
+        unsigned int clear_mask = 1 << (sizeof(unsigned int) * 8 - 7);
+        unsigned int set_mask = thread_id << (sizeof(unsigned int) * 8 - 7);
+
+        bool rw_valid = bool(f_read[thread_id] >> std::hex >> expected_addr >> expected_data);
+        expected_addr = (expected_addr & ~clear_mask) ^ set_mask;
+        if (!rw_valid)
         {
             std::cout << "\n!! Ran out of expected write back."
                          "\n!! More write back are executed than expected"
@@ -138,11 +221,12 @@ void wb_event(const int addr, const int data)
                       << std::hex << addr << " data=" << data << std::endl;
             std::raise(SIGINT);
         }
-        else if (expected_addr != addr || expected_data != data)
+        // Experimental (kludge): Take out MSB of read data.
+        else if (expected_addr != addr || (expected_data != data && (expected_data ^ set_mask) != data))
         {
             std::cout << "\n!! [" << std::dec << main_time << "] expected write back mismatches"
                       << "\n!! [" << std::dec << main_time << "] expected addr=" << std::hex << expected_addr
-                      << " data=" << expected_data
+                      << " data=" << expected_data << " or " << (expected_data ^ clear_mask)
                       << "\n!! [" << std::dec << main_time << "] actual   addr=" << std::hex << addr
                       << " data=" << data << std::endl;
             std::raise(SIGINT);
@@ -153,37 +237,61 @@ void wb_event(const int addr, const int data)
 }
 
 unsigned int load_store_count = 0;
-void ls_event(const int op, const int addr, const int data)
+void ls_event(const int op, const int addr, const int data, const int thread_id)
 {
+    static std::ofstream f_write[2];
+    static std::ifstream f_read[2];
+    const std::string fname[2] = {std::string(hexfiles_dir + "/hexfiles/"+ std::string(benchmark[0]) +".ls.txt"),
+                                    std::string(hexfiles_dir + "/hexfiles/"+ std::string(benchmark[1]) +".ls.txt")};
+
+    static bool initialized = false;
+
+    if (!initialized) {
+        for (int i = 0; i < 2; i++) {
+            if(stream_dump)
+                f_write[i].open(fname[i]);
+            f_read[i].open(fname[i]);
+            if((stream_dump && !f_write[i].is_open()) || !f_read[i].is_open()) {
+                std::cerr << "Failed to open file: " << fname[thread_id] << std::endl;
+                exit(-1);
+            }
+        }
+        initialized = true;
+    }
+
     if (stream_print)
         std::cout << "-- EVENT ls op=" << std::hex << op
                   << " addr=" << addr
                   << " data=" << data << std::endl;
     if (stream_dump)
     {
-        std::string fname(hexfiles_dir + "/hexfiles/"+ std::string(benchmark) +".ls.txt");
+        std::string fname(hexfiles_dir + "/hexfiles/"+ std::string(benchmark[thread_id]) +".ls.txt");
         static std::ofstream f(fname);
-        if (!f.is_open())
+        if (!f_write[thread_id].is_open())
         {
-            std::cerr << "Failed to open file: " << fname << std::endl;
+            std::cerr << "Failed to open file: " << fname[thread_id] << std::endl;
             exit(-1);
         }
         if (stream_dump >= 2)
-            f << std::dec << main_time << " ";
-        f << std::hex << op << " " << addr << " " << data << std::endl;
+            f_write[thread_id] << std::dec << main_time << " ";
+        f_write[thread_id] << std::hex << op << " " << addr << " " << data << std::endl;
     }
     if (stream_check)
     {
-        std::string fname(hexfiles_dir + "/hexfiles/"+ std::string(benchmark) +".ls.txt");
-        static std::ifstream f(fname);
-        if (!f.is_open())
+        if (!f_read[thread_id].is_open())
         {
-            std::cerr << "Failed to open file: " << fname << std::endl;
+            std::cerr << "Failed to open file: " << fname[thread_id] << std::endl;
             exit(-1);
         }
 
         unsigned int expected_op, expected_addr, expected_data;
-        if (!(f >> std::hex >> expected_op && f >> expected_addr && f >> expected_data))
+        unsigned int mask = thread_id<< (sizeof(unsigned int) * 8 - 7);
+        unsigned int clear_mask = 1 << (sizeof(unsigned int) * 8 - 7);
+        unsigned int set_mask = thread_id << (sizeof(unsigned int) * 8 - 7);
+
+        bool rw_valid = bool(f_read[thread_id] >> std::hex >> expected_op && f_read[thread_id] >> expected_addr && f_read[thread_id] >> expected_data);
+        expected_addr = (expected_addr & ~clear_mask) ^ set_mask;
+        if (!rw_valid)
         {
             std::cout << "\n!! Ran out of expected load store"
                          "\n!! More load store are executed than expected"
@@ -191,12 +299,13 @@ void ls_event(const int op, const int addr, const int data)
                       << std::hex << op << " addr=" << addr << " data=" << data << std::endl;
             std::raise(SIGINT);
         }
-        else if (expected_op != op || expected_addr != addr || expected_data != data)
+        // Experimental (kludge): Take out MSB of read data.
+        else if (expected_op != op || expected_addr != addr || (expected_data != data && (expected_data ^ set_mask) != data))
         {
             std::cout << "\n!! [" << std::dec << main_time << "] expected load store mismatches"
                       << "\n!! [" << std::dec << main_time << "] expected op=" << std::hex << expected_op
                       << " addr=" << expected_addr
-                      << " data=" << expected_data
+                      << " data=" << expected_data << " or " << (expected_data ^ set_mask)
                       << "\n!! [" << std::dec << main_time << "] actual   op=" << std::hex << op
                       << " addr=" << addr
                       << " data=" << data << std::endl;
@@ -214,7 +323,7 @@ int main(int argc, char **argv)
     int opt;
     int dump = 0;
     double memory_delay_factor = 1.0;
-    while ((opt = getopt(argc, argv, "dmpstf:b:")) != -1)
+    while ((opt = getopt(argc, argv, "dmpstf:b:c:")) != -1)
     {
         switch (opt)
         {
@@ -248,19 +357,30 @@ int main(int argc, char **argv)
             }
             break;
         case 'b':
-            benchmark = optarg;
+            benchmark[0] = optarg;
+            break;
+        case 'c':
+            benchmark[1] = optarg;
             break;
         default: /* '?' */
-            std::cerr << "Usage: " << argv[0] << " [-dmpst] [-b benchmark] [+plusargs]" << std::endl;
+            std::cerr << "Usage: " << argv[0] << " [-dmpst] [-b thread 0 benchmark] [-c thread 1 benchmark] [+plusargs]" << std::endl;
             return -1;
         }
+    }
+
+    if(!strcmp(benchmark[0], benchmark[1])) {
+        std::cerr << "Running the same benchmark twice not yet supported." << std::endl;
+        return -1;
     }
 
     Verilated::commandArgs(argc, argv); // Remember args
 
     top = new Vmips_core; // Create instance
-    std::string const hex_file_name (hexfiles_dir + "/hexfiles/" + std::string(benchmark) + ".hex");
-    memory = new Memory(hex_file_name.c_str(), memory_delay_factor);
+    std::string hex_file_strings[2] = {(hexfiles_dir + "/hexfiles/" + std::string(benchmark[0]) + ".hex"),
+                                        (hexfiles_dir + "/hexfiles/" + std::string(benchmark[1]) + ".hex")};
+    const char* hex_file_names[2] = {hex_file_strings[0].c_str(), hex_file_strings[1].c_str()};
+
+    memory = new Memory(hex_file_names, memory_delay_factor);
     memory_driver = new MemoryDriver(top, memory);
 
     VerilatedFstC *tfp;

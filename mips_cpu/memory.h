@@ -97,7 +97,7 @@ struct AxiReadData
 class Memory
 {
 public:
-    Memory(const char *const hex_file, double delay_factor = 1.0);
+    Memory(const char *const hex_file[2], double delay_factor = 1.0);
 
     void process(uint64_t time);
 

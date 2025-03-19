@@ -26,6 +26,7 @@
  `include "mips_core.svh"
 
  module i_cache #(
+	parameter NUM_THREADS = 2,
 	 parameter INDEX_WIDTH = 6, // 1 KB Cahe size 
 	 parameter BLOCK_OFFSET_WIDTH = 2,
 	 parameter BUFFER_LEN = 8,
@@ -34,6 +35,8 @@
 	 // General signals
 	 input clk,    // Clock
 	 input rst_n,  // Synchronous reset active low
+	 
+	 thread_control_ifc.in i_tc,
  
 	 // Request
 	 pc_ifc.in i_pc_current,
@@ -144,7 +147,7 @@ endgenerate
  endgenerate
 
  // Valid bits
- logic [DEPTH - 1 : 0] valid_bits[ASSOCIATIVITY];
+ logic [DEPTH - 1 : 0] valid_bits[NUM_THREADS][ASSOCIATIVITY];
 
 
  // Intermediate signals
@@ -153,8 +156,8 @@ endgenerate
 
  always_comb
  begin
-	 tag_hit = ( ((i_tag == tagbank_rdata[0]) & valid_bits[0][i_index])
-			   |	((i_tag == tagbank_rdata[1]) & valid_bits[1][i_index]));
+	 tag_hit = ( ((i_tag == tagbank_rdata[0]) & valid_bits[i_tc.thread_id][0][i_index])
+			   |	((i_tag == tagbank_rdata[1]) & valid_bits[i_tc.thread_id][1][i_index]));
 	 hit = (tag_hit)
 		 & (state == STATE_READY);
 	 miss = ~hit;
@@ -235,7 +238,7 @@ endgenerate
 		 state <= STATE_READY;
 		 databank_select <= 1;
 		 for (int i=0; i<ASSOCIATIVITY;i++)
-			 valid_bits[i] <= '0;
+			 valid_bits[i_tc.thread_id][i] <= '0;
 		 for (int i=0; i<DEPTH;i++)
 			 lru_rp[i] <= 0;
 	 end
@@ -258,7 +261,7 @@ endgenerate
 			 begin
 				 if (sb_hit)
 				 begin
-					 valid_bits[r_select_way][r_index] <= 1'b1;
+					 valid_bits[i_tc.thread_id][r_select_way][r_index] <= 1'b1;
 				 end
 			 end
 		 endcase
@@ -273,6 +276,7 @@ endgenerate
 )SB_G(
 	.clk,
 	.rst_n(rst_n),
+	.thread_id(i_tc.thread_id),
 	.current_addr({r_tag,r_index,2'b0}),
 	.cache_miss(miss),
 	.miss_valid(STATE_REFILL_DATA == state),
