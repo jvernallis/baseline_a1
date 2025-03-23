@@ -1,29 +1,29 @@
-/*
- * i_cache.sv
- * Author: Zinsser Zhang 
- * Revision : Sankara 			
- * Last Revision: 04/04/2023
- *
- * This is a direct-mapped instruction cache. Line size and depth (number of
- * lines) are set via INDEX_WIDTH and BLOCK_OFFSET_WIDTH parameters. Notice that
- * line size means number of words (each consist of 32 bit) in a line. Because
- * all addresses in mips_core are 26 byte addresses, so the sum of TAG_WIDTH,
- * INDEX_WIDTH and BLOCK_OFFSET_WIDTH is `ADDR_WIDTH - 2.
- *
- * Typical line sizes are from 2 words to 8 words. The memory interfaces only
- * support up to 8 words line size.
- *
- * Because we need a hit latency of 1 cycle, we need an asynchronous read port,
- * i.e. data is ready during the same cycle when address is calculated. However,
- * SRAMs only support synchronous read, i.e. data is ready the cycle after the
- * address is calculated. Due to this conflict, we need to read from the banks
- * on the clock edge at the beginning of the cycle. As a result, we need both
- * the registered version of address and a non-registered version of address
- * (which will effectively be registered in SRAM).
- *
- * See wiki page "Synchronous Caches" for details.
- */
- `include "mips_core.svh"
+// /*
+//  * i_cache.sv
+//  * Author: Zinsser Zhang 
+//  * Revision : Sankara 			
+//  * Last Revision: 04/04/2023
+//  *
+//  * This is a direct-mapped instruction cache. Line size and depth (number of
+//  * lines) are set via INDEX_WIDTH and BLOCK_OFFSET_WIDTH parameters. Notice that
+//  * line size means number of words (each consist of 32 bit) in a line. Because
+//  * all addresses in mips_core are 26 byte addresses, so the sum of TAG_WIDTH,
+//  * INDEX_WIDTH and BLOCK_OFFSET_WIDTH is `ADDR_WIDTH - 2.
+//  *
+//  * Typical line sizes are from 2 words to 8 words. The memory interfaces only
+//  * support up to 8 words line size.
+//  *
+//  * Because we need a hit latency of 1 cycle, we need an asynchronous read port,
+//  * i.e. data is ready during the same cycle when address is calculated. However,
+//  * SRAMs only support synchronous read, i.e. data is ready the cycle after the
+//  * address is calculated. Due to this conflict, we need to read from the banks
+//  * on the clock edge at the beginning of the cycle. As a result, we need both
+//  * the registered version of address and a non-registered version of address
+//  * (which will effectively be registered in SRAM).
+//  *
+//  * See wiki page "Synchronous Caches" for details.
+//  */
+//  `include "mips_core.svh"
 
  module i_cache #(
 	parameter NUM_THREADS = 2,
@@ -97,6 +97,8 @@ endgenerate
  logic select_way;
  logic r_select_way;
  logic [DEPTH - 1 : 0] lru_rp;
+
+ logic refill_thread;
 
  // databanks
  genvar g,w;
@@ -194,7 +196,6 @@ endgenerate
 
  always_comb
  begin
-
 		 databank_wdata = sb_rdata;
 		 databank_waddr = r_index;
 		 if (next_state == STATE_READY)
@@ -237,8 +238,10 @@ endgenerate
 	 begin
 		 state <= STATE_READY;
 		 databank_select <= 1;
-		 for (int i=0; i<ASSOCIATIVITY;i++)
-			 valid_bits[i_tc.thread_id][i] <= '0;
+		 for (int i=0; i<NUM_THREADS;i++) begin
+			for (int j=0; j<ASSOCIATIVITY;j++)
+				valid_bits[i][j] <= '0;
+		 end
 		 for (int i=0; i<DEPTH;i++)
 			 lru_rp[i] <= 0;
 	 end
@@ -254,6 +257,7 @@ endgenerate
 					 r_tag <= i_tag;
 					 r_index <= i_index;
 					 r_select_way <= select_way;
+					 refill_thread <= i_tc.thread_id;
 				 end
 					 lru_rp[i_index] <= ~select_way;
 			 end
@@ -261,7 +265,8 @@ endgenerate
 			 begin
 				 if (sb_hit)
 				 begin
-					 valid_bits[i_tc.thread_id][r_select_way][r_index] <= 1'b1;
+					 valid_bits[refill_thread][r_select_way][r_index] <= 1'b1;
+					 valid_bits[~refill_thread][r_select_way][r_index] <= 1'b0;
 				 end
 			 end
 		 endcase
@@ -276,7 +281,7 @@ endgenerate
 )SB_G(
 	.clk,
 	.rst_n(rst_n),
-	.thread_id(i_tc.thread_id),
+	.thread_id(refill_thread),
 	.current_addr({r_tag,r_index,2'b0}),
 	.cache_miss(miss),
 	.miss_valid(STATE_REFILL_DATA == state),
@@ -286,5 +291,6 @@ endgenerate
 	.mem_read_data
 );
  endmodule
+ 
  
  

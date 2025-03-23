@@ -29,17 +29,20 @@ module hazard_controller (
 	// Feedback from IF
 	cache_output_ifc.in if_i_cache_output,
 	branch_prediction_ifc.in if_branch_prediction, 
-	// Note: This is the prediction that was made in last cycle's fetch, 
-	// which is to be checked against the resolution made in this cycle's decode.
-	branch_prediction_ifc.in dec_branch_prediction, 
 	
 	// Feedback from DEC
 	pc_ifc.in dec_pc,
+	branch_prediction_ifc.in dec_branch_prediction, 
 	branch_resolution_ifc.in dec_branch_resolved,
-	input lw_hazard,
-	input mem_done,
+	alu_pass_through_ifc.in dec_pass_through,
 
 	branch_prediction_ifc.out if_branch_prediction_pass_through,
+
+	input lw_hazard,
+	input mem_done,
+	input mem_busy,
+
+
 	// Hazard control output
 	hazard_control_ifc.out i2i_hc,
 	hazard_control_ifc.out i2d_hc,
@@ -50,50 +53,28 @@ module hazard_controller (
 	// Load pc output
 	load_pc_ifc.out load_pc
 );
-	// Branch controller moved to MIPS core
-	// branch_controller BRANCH_CONTROLLER (
-	// 	.clk, .rst_n,
-	// 	.dec_pc,
-	// 	.dec_branch_resolved,
-	// 	.ex_pc,
-	// );
-
 	// We have total 6 potential hazards
 	logic ic_miss;			// I cache miss
 	// Gone without delay slots:
 	//logic ds_miss;			// Delay slot miss
-	// Gone with branch resolution moved to decode
-	//logic dec_overload;		// Branch predict taken or Jump
-
-	// "Branch prediction wrong now entails:"
-	// Incorrect prediction as to if it was/wasn't a branch,
-	// Incorrect target prediction,
-	// Incorrect decision prediction
-	// And the overload now happens in dec.
+	
 	logic dec_overload;		// Branch prediction wrong
 	//    lw_hazard;		// Load word hazard (input from forward unit)
-	logic dc_miss;			// D cache miss
+	logic dc_busy_multithread;		// D cache access when other (active) thread is being serviced
+	logic dc_miss_single_thread;	// D cache miss running in single-thread mode
+
 	logic thread_switch;
 
 	logic branch_correct;
 	logic branch_missed; 			// Branch was not identified as a branch from BTB
 	logic branch_misidentified; 	// Non-branch was identified as a branch from BTB
-	logic branch_target_wrong;				// Branch target was incorrect
+	logic branch_target_wrong;		// Branch target was incorrect
 	logic branch_mispredicted;		// Branch decision was incorrect
 
 	// Determine if we have these hazards
 	always_comb
 	begin
 		ic_miss = ~if_i_cache_output.valid;
-		//ds_miss = ic_miss & dec_branch_resolved.is_branch;
-		// dec_overload = dec_branch_resolved.is_branch
-		// 	& (dec_branch_resolved.is_jump
-		// 		| (dec_branch_resolved.prediction == TAKEN));
-
-		// Overloaded needed only if the wrong path was taken
-		branch_correct = (dec_branch_prediction.is_branch & dec_branch_resolved.is_branch) & 
-						 (dec_branch_prediction.prediction == dec_branch_resolved.outcome) &
-						 (dec_branch_prediction.target == dec_branch_resolved.target);
 
 		dec_overload =
 			(!dec_branch_prediction.is_branch & dec_branch_resolved.is_branch)
@@ -101,6 +82,19 @@ module hazard_controller (
 			| (dec_branch_resolved.is_branch & 
 			((dec_branch_prediction.target != dec_branch_resolved.target)
 			| (dec_branch_prediction.prediction != dec_branch_resolved.outcome)));
+
+		dc_busy_multithread = (dec_pass_through.is_mem_access) & (mem_busy & ~i_tc.thread_switch);
+		dc_miss_single_thread = ~mem_done & ~i_tc.thread_switch_available;
+
+		thread_switch = i_tc.thread_switch;
+	end
+
+	// Logging
+	always_comb begin
+		// Overloaded needed only if the wrong path was taken
+		branch_correct = (dec_branch_prediction.is_branch & dec_branch_resolved.is_branch) & 
+						 (dec_branch_prediction.prediction == dec_branch_resolved.outcome) &
+						 (dec_branch_prediction.target == dec_branch_resolved.target);
 
 		branch_missed = 0;
 		branch_misidentified = 0;
@@ -116,9 +110,6 @@ module hazard_controller (
 			else if (dec_branch_prediction.prediction != dec_branch_resolved.outcome)
 				branch_mispredicted = 1;
 		end
-		dc_miss = ~mem_done;
-	
-		thread_switch = i_tc.thread_switch;
 	end
 
 	always_comb
@@ -219,15 +210,25 @@ module hazard_controller (
 
 		if (thread_switch)
 			ex_flush = 1'b1;
+
+		if (dc_busy_multithread) begin
+			ex_stall = 1'b1;
+			ex_flush = 1'b1;
+		end
 	end
 
 	always_comb
 	begin : handle_mem
-		mem_stall = dc_miss;
-		mem_flush = dc_miss;
+		mem_stall = 1'b0;
+		mem_flush = 1'b0;
 
 		if (thread_switch)
+			mem_flush = 1'b1;	
+
+		if (dc_miss_single_thread) begin
+			mem_stall = 1'b1;
 			mem_flush = 1'b1;
+		end
 	end
 
 	// Now distribute the control signals to each pipeline registers
@@ -263,7 +264,9 @@ module hazard_controller (
 		if (dec_overload) stats_event("dec_overload");
 		// if (ex_overload) stats_event("ex_overload");
 		if (lw_hazard) stats_event("lw_hazard");
-		if (dc_miss) stats_event("dc_miss");
+		if (dc_miss_single_thread) stats_event("dc_miss_single_thread");
+		if (dc_busy_multithread) stats_event("dc_busy_multithread");
+		if (thread_switch) stats_event("thread_switch");
 		if (if_stall) stats_event("if_stall");
 		if (if_flush) stats_event("if_flush");
 		if (dec_stall) stats_event("dec_stall");

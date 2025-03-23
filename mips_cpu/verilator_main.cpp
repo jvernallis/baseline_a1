@@ -103,7 +103,7 @@ void pc_event(const int pc, const int thread_id)
             exit(-1);
         }
 
-        unsigned int expected_pc;
+        static unsigned int expected_pc;
         unsigned int clear_mask = 1 << (sizeof(unsigned int) * 8 - 7);
         unsigned int set_mask = thread_id << (sizeof(unsigned int) * 8 - 7);
 
@@ -116,6 +116,7 @@ void pc_event(const int pc, const int thread_id)
             if(last_thread_id != thread_id){
                 bool pc_valid = bool(f_read[thread_id] >> std::hex >> expected_pc);
                 expected_pc = (expected_pc & ~clear_mask) ^ set_mask;
+
                 if(!pc_valid){
                     std::cout << "\n!! Ran out of expected pc on a thread restart."
                             "\n!! More instructions are executed than expected."
@@ -126,7 +127,6 @@ void pc_event(const int pc, const int thread_id)
                     std::raise(SIGINT);
                 }
             } 
-            
 
             thread_restart_cycles++;
             if(expected_pc == pc){
@@ -157,6 +157,7 @@ void pc_event(const int pc, const int thread_id)
             }
         }
     }
+
     last_thread_id = thread_id;
     instruction_count++;
 }
@@ -208,11 +209,13 @@ void wb_event(const int addr, const int data, const int thread_id)
         }
 
         unsigned int expected_addr, expected_data;
-        unsigned int clear_mask = 1 << (sizeof(unsigned int) * 8 - 7);
-        unsigned int set_mask = thread_id << (sizeof(unsigned int) * 8 - 7);
+        unsigned int clear_mask_addr = 1 << 5;
+        unsigned int set_mask_addr = thread_id << 5;
+        unsigned int clear_mask_data = 1 << (sizeof(unsigned int) * 8 - 7);
+        unsigned int set_mask_data = thread_id << (sizeof(unsigned int) * 8 - 7);
 
         bool rw_valid = bool(f_read[thread_id] >> std::hex >> expected_addr >> expected_data);
-        expected_addr = (expected_addr & ~clear_mask) ^ set_mask;
+        expected_addr = (expected_addr & ~clear_mask_addr) ^ set_mask_addr;
         if (!rw_valid)
         {
             std::cout << "\n!! Ran out of expected write back."
@@ -222,11 +225,11 @@ void wb_event(const int addr, const int data, const int thread_id)
             std::raise(SIGINT);
         }
         // Experimental (kludge): Take out MSB of read data.
-        else if (expected_addr != addr || (expected_data != data && (expected_data ^ set_mask) != data))
+        else if (expected_addr != addr || (expected_data != data && (expected_data ^ set_mask_data) != data))
         {
             std::cout << "\n!! [" << std::dec << main_time << "] expected write back mismatches"
                       << "\n!! [" << std::dec << main_time << "] expected addr=" << std::hex << expected_addr
-                      << " data=" << expected_data << " or " << (expected_data ^ clear_mask)
+                      << " data=" << expected_data << " or " << (expected_data ^ clear_mask_data)
                       << "\n!! [" << std::dec << main_time << "] actual   addr=" << std::hex << addr
                       << " data=" << data << std::endl;
             std::raise(SIGINT);

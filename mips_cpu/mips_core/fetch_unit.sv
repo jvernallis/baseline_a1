@@ -36,19 +36,24 @@ module fetch_unit (
 
 	always_comb
 	begin
-		if (!i_hc.stall) begin
-			if(i_load_pc.we) begin
-				o_pc_next.pc = {i_tc.thread_id, i_load_pc.new_pc[`ADDR_WIDTH - 2 : 0]};
-			end
-			else
-			begin
-				if(i_branch_prediction.is_branch & i_branch_prediction.prediction)
-					o_pc_next.pc = {i_tc.thread_id, i_branch_prediction.target[`ADDR_WIDTH - 2 : 0]};
+		if(!i_tc.thread_switch) begin
+			if (!i_hc.stall) begin
+				if(i_load_pc.we) begin
+					o_pc_next.pc = {i_tc.thread_id, i_load_pc.new_pc[`ADDR_WIDTH - 2 : 0]};
+				end
 				else
-					o_pc_next.pc = o_pc_current.pc + `ADDR_WIDTH'd4;
+				begin
+					if(i_branch_prediction.is_branch & i_branch_prediction.prediction)
+						o_pc_next.pc = {i_tc.thread_id, i_branch_prediction.target[`ADDR_WIDTH - 2 : 0]};
+					else
+						o_pc_next.pc = o_pc_current.pc + `ADDR_WIDTH'd4;
+				end
+			end else begin
+				o_pc_next.pc = {i_tc.thread_id, o_pc_current.pc[`ADDR_WIDTH - 2 : 0]};
 			end
-		end else begin
-			o_pc_next.pc = {i_tc.thread_id, o_pc_current.pc[`ADDR_WIDTH - 2 : 0]};
+		end 
+		else begin
+			o_pc_next.pc = i_tc.thread_resume_pc[~i_tc.thread_id];
 		end
 	end
 
@@ -58,7 +63,10 @@ module fetch_unit (
 			o_pc_current.pc <= {i_tc.thread_id, {`ADDR_WIDTH - 1{1'b0}}};	// Start point of programs are always 0x0
 		else
 		begin
-			o_pc_current.pc <= {i_tc.thread_id, o_pc_next.pc[`ADDR_WIDTH - 2 : 0]};
+			if(i_tc.thread_switch)
+				o_pc_current.pc <= i_tc.thread_resume_pc[~i_tc.thread_id];
+			else
+				o_pc_current.pc <= {i_tc.thread_id, o_pc_next.pc[`ADDR_WIDTH - 2 : 0]};
 		end
 	end
 

@@ -78,17 +78,6 @@ interface alu_pass_through_ifc ();
 	modport out (output is_mem_access, mem_action, sw_data, uses_rw, rw_addr);
 endinterface
 
-// This interface is no longer needed as branch evaluation happens in decode.
-// interface branch_result_ifc ();
-// 	logic valid;
-// 	mips_core_pkg::BranchOutcome prediction;
-// 	mips_core_pkg::BranchOutcome outcome;
-// 	logic [`ADDR_WIDTH - 1 : 0] recovery_target;
-
-// 	modport in  (input valid, prediction, outcome, recovery_target);
-// 	modport out (output valid, prediction, outcome, recovery_target);
-// endinterface
-
 interface d_cache_pass_through_ifc ();
 	logic is_mem_access;
 	logic [`DATA_WIDTH - 1 : 0] alu_result;
@@ -119,18 +108,19 @@ interface hazard_control_ifc ();
 endinterface
 
 interface thread_control_ifc ();
-	logic thread_id; // ID of the active thread
-	logic thread_switch; //True on the cycle a thread switches
+	logic thread_id; 			// ID of the active thread
+	logic thread_switch; 		// True on the cycle a thread switches
+	logic thread_switch_available; 	// True whenever a thread switch is available 
 	logic current_thread_done; // Done status of the active thread
-	logic thread_0_done; 
-	logic thread_1_done;
 
 	//logic temp_thread_switch; //Keeping this around for when I'm doing testing in both mips_core and the hazard controller
 
-	logic [`ADDR_WIDTH - 1 : 0] thread_resume_pc[2]; //PC to resume threads from
+	logic thread_done[2]; // Threads complete
+	logic thread_ready[2]; // Threads can be switched to
+	logic [`ADDR_WIDTH - 1 : 0] thread_resume_pc[2]; // PC to resume threads from
 
-	modport in (input thread_id, thread_switch, current_thread_done, thread_0_done, thread_1_done, thread_resume_pc);
-	modport out (output thread_id, thread_switch, current_thread_done, thread_0_done, thread_1_done, thread_resume_pc);
+	modport in (input thread_id, thread_switch, thread_switch_available, current_thread_done, thread_done, thread_ready, thread_resume_pc);
+	modport out (output thread_id, thread_switch, thread_switch_available, current_thread_done, thread_done, thread_ready, thread_resume_pc);
 
 	// modport thread_control (output thread_id, )
 endinterface

@@ -55,6 +55,7 @@ module d_cache #(
 
 	// Response
 	cache_output_ifc.out out,
+	output mem_busy,
 
 	// AXI interfaces
 	axi_write_address.master mem_write_address,
@@ -83,6 +84,7 @@ module d_cache #(
 	logic [INDEX_WIDTH - 1 : 0] i_index_next;
 	
 	logic write_thread;
+	logic refill_thread;
 
 	assign {i_tag, i_index, i_block_offset} = in.addr[`ADDR_WIDTH - 1 : 2];
 	assign i_index_next = in.addr_next[BLOCK_OFFSET_WIDTH + 2 +: INDEX_WIDTH];
@@ -217,7 +219,7 @@ module d_cache #(
 		else if (miss)
 		begin
 			//lip lru implementation
-			if(lip_lru_valid || ~(valid_bits[i_tc.thread_id][0][i_index] 
+			if(lip_lru_valid || (~valid_bits[i_tc.thread_id][0][i_index] 
 								& valid_bits[i_tc.thread_id][1][i_index] 
 								& valid_bits[i_tc.thread_id][2][i_index] 
 								& valid_bits[i_tc.thread_id][3][i_index]))begin
@@ -284,7 +286,7 @@ module d_cache #(
 	always_comb begin
 		mem_read_address.ARADDR = {r_tag, r_index, {BLOCK_OFFSET_WIDTH + 2{1'b0}}};
 		// Experimental: Set memory address MSB to thread ID
-		mem_read_address.ARADDR = {i_tc.thread_id, mem_read_address.ARADDR[`ADDR_WIDTH - 2 : 0]};
+		mem_read_address.ARADDR = {refill_thread, mem_read_address.ARADDR[`ADDR_WIDTH - 2 : 0]};
 		mem_read_address.ARLEN = LINE_SIZE;
 		mem_read_address.ARVALID = state == STATE_REFILL_REQUEST;
 		mem_read_address.ARID = 4'd8;
@@ -327,6 +329,11 @@ module d_cache #(
 
 	always_comb
 	begin
+		mem_busy = (next_state != STATE_READY) | (state != STATE_READY);
+	end
+
+	always_comb
+	begin
 		for (int i=0; i<ASSOCIATIVITY;i++)
 			tagbank_we[i] = 'b0;
 		tagbank_we[r_select_way] = last_refill_word;
@@ -347,7 +354,7 @@ module d_cache #(
 		next_state = state;
 		unique case (state)
 			STATE_READY:
-				if (miss)
+				if (miss) begin
 					if ((valid_bits[i_tc.thread_id][select_way][i_index] & dirty_bits[i_tc.thread_id][select_way][i_index]) | 
 						 valid_bits[~i_tc.thread_id][select_way][i_index] & dirty_bits[~i_tc.thread_id][select_way][i_index]) begin
 						if(dirty_bits[1'b0][select_way][i_index]) 
@@ -359,6 +366,8 @@ module d_cache #(
 					else begin
 						next_state = STATE_REFILL_REQUEST;
 					end
+					refill_thread = i_tc.thread_id;
+				end
 
 			STATE_FLUSH_REQUEST:
 				if (mem_write_address.AWREADY)
@@ -416,20 +425,12 @@ module d_cache #(
 			for (int i=0; i<NUM_THREADS;i++) begin
 				for (int j=0; j<ASSOCIATIVITY;j++)
 					valid_bits[i][j] <= '0;
+			end
 			for (int i=0; i<DEPTH;i++)
 				mru_rp[i] <= 0;
-			end
 		end
 		else
 		begin
-			// Experiment: Clear out valid bits on thread switch
-			// if(i_tc.current_thread_done) begin
-			// 	for (int i=0; i<ASSOCIATIVITY;i++)
-			// 		valid_bits[i] <= '0;
-			// 	for (int i=0; i<DEPTH;i++)
-			// 		lru_rp[i] <= 0;
-			// end
-
 			state <= next_state;
 			case (state)
 				STATE_READY:
@@ -472,10 +473,10 @@ module d_cache #(
 
 					if (last_refill_word)
 					begin
-						valid_bits[i_tc.thread_id][r_select_way][r_index] <= 1'b1;
-						valid_bits[~i_tc.thread_id][r_select_way][r_index] <= 1'b0;
-						dirty_bits[i_tc.thread_id][r_select_way][r_index] <= 1'b0;
-						dirty_bits[~i_tc.thread_id][r_select_way][r_index] <= 1'b0;
+						valid_bits[refill_thread][r_select_way][r_index] <= 1'b1;
+						valid_bits[~refill_thread][r_select_way][r_index] <= 1'b0;
+						dirty_bits[refill_thread][r_select_way][r_index] <= 1'b0;
+						dirty_bits[~refill_thread][r_select_way][r_index] <= 1'b0;
 					end
 				end
 			endcase

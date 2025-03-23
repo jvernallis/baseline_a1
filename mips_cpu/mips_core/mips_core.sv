@@ -70,10 +70,10 @@ module mips_core (
 	branch_resolution_ifc dec_branch_resolved();
 	alu_input_ifc dec_alu_input();
 	alu_pass_through_ifc dec_alu_pass_through();
-	branch_prediction_ifc d2e_pred();
 
 	// ==== DEC to EX
 	pc_ifc d2e_pc();
+	branch_prediction_ifc d2e_pred();
 	alu_input_ifc d2e_alu_input();
 	alu_pass_through_ifc d2e_alu_pass_through();
 
@@ -89,6 +89,7 @@ module mips_core (
 
 	// |||| MEM Stage
 	cache_output_ifc mem_d_cache_output();
+	logic mem_busy;
 	logic mem_done;
 	write_back_ifc mem_write_back();
 
@@ -287,6 +288,7 @@ module mips_core (
 
 		.in(e2m_d_cache_input),
 		.out(mem_d_cache_output),
+		.mem_busy,
 
 		.mem_read_address(mem_read_address[8]),
 		.mem_read_data   (mem_read_data[8]),
@@ -334,11 +336,15 @@ module mips_core (
 
 		.if_i_cache_output,
 		.if_branch_prediction(i2d_pred),
-		.dec_branch_prediction(d2e_pred),
+		
 		.dec_pc(i2d_pc),
+		.dec_branch_prediction(d2e_pred),
 		.dec_branch_resolved(dec_branch_resolved),
+		.dec_pass_through(d2e_alu_pass_through),
+		
 		.lw_hazard,
 		.mem_done,
+		.mem_busy,
 
 		.if_branch_prediction_pass_through(i2d_pred_pass_through),
 
@@ -403,11 +409,12 @@ module mips_core (
 		.clk, .rst_n,
 
 		.i_tc(tc),
+		.mem_busy,
 		.e2m_pc,
 		.if_pc_current
 	);
 
-	assign done = tc.thread_0_done & tc.thread_1_done;
+	assign done = tc.thread_done[0] & tc.thread_done[1];
 
 	// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 	// xxxx Debug and statistic collect logic (Not synthesizable)
@@ -429,7 +436,7 @@ module mips_core (
 
 		if (m2w_write_back.uses_rw)
 		begin
-			wb_event({tc.thread_id, m2w_write_back.rw_addr[`ADDR_WIDTH - 2 : 0]}, m2w_write_back.rw_data, tc.thread_id);
+			wb_event({tc.thread_id, m2w_write_back.rw_addr}, m2w_write_back.rw_data, tc.thread_id);
 		end
 
 		if (!e2m_hc.stall
